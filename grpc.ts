@@ -29,8 +29,8 @@ const redisClient = createClient({
 
 //init function: needs to be awaited before running
 export async function init(){
-    //await redisClient.flushAll();
     await redisClient.connect();
+    //await redisClient.flushAll();
     try{
         try{
             stream.end();
