@@ -11,9 +11,8 @@ import { grpcExistsMigration, grpcTransactionToTrades, tradeToPrice } from "./co
 import bs58 from "bs58";
 import { fileURLToPath } from 'url';
 import fs from "fs";
-import { promisify } from 'util';
+import { createClient } from 'redis';
 
-const writeFileAsync = promisify(fs.writeFile);
 
 const logger = createLogger(fileURLToPath(import.meta.url));
 
@@ -22,10 +21,15 @@ let stream: ClientDuplexStream<SubscribeRequest, SubscribeUpdate>;
 
 let tokensPerLamportMap = new Map<string, number>();
 
+const redisClient = createClient({
+    url: 'redis://localhost:6379'  // adjust URL as needed
+});
+
 // +++ INITIALIZATION & SETUP +++
 
 //init function: needs to be awaited before running
 export async function init(){
+    await redisClient.connect();
     try{
         try{
             stream.end();
@@ -176,33 +180,25 @@ async function trackBuy(trade: Trade, tokensPerLamport: number){
         waitingForSell: 1
     }
     queue.push(status);
-    const trackingFile = `./tracking/${trade.mint}.json`;
-    if(!fs.existsSync(trackingFile)){
-        writeFileAsync(trackingFile, JSON.stringify([{
-            amount: -1,
-            id: status.positionID
-        }]));
-    }else{
-        const trackingData = JSON.parse(fs.readFileSync(trackingFile, "utf8"));
-        trackingData.push({
-            amount: -1,
-            id: status.positionID
-        });
-        writeFileAsync(trackingFile, JSON.stringify(trackingData));
-    }
+    
+    // Store in Redis instead of file
+    await redisClient.hSet(`tracking:${trade.mint}`, status.positionID, JSON.stringify({
+        amount: -1,
+        id: status.positionID
+    }));
 }
 
 async function sellThird(status: Status){
     const currentTokensPerLamport = tokensPerLamportMap.get(status.mint);
     if(!currentTokensPerLamport) return;
     const sellAmount = (status.initialTokensPerLamport / currentTokensPerLamport) / 3;
-    const trackingFile = `./tracking/${status.mint}.json`;
-    const trackingData = JSON.parse(fs.readFileSync(trackingFile, "utf8"));
-    trackingData.push({
+    
+    // Store in Redis instead of file
+    await redisClient.hSet(`tracking:${status.mint}`, status.positionID, JSON.stringify({
         amount: sellAmount,
         id: status.positionID
-    });
-    writeFileAsync(trackingFile, JSON.stringify(trackingData));
+    }));
+
     if(status.waitingForSell < 3){
         queue.push({
             ...status,
