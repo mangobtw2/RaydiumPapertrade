@@ -138,6 +138,7 @@ setInterval(() => {
 }, 1000);
 
 type Status = {
+    positionID: string;
     mint: string;
     address: string;
     initialTokensPerLamport: number;
@@ -159,8 +160,13 @@ async function handleTransactionUpdate(data: SubscribeUpdate){
     }
 }
 
+function createID(){
+    return crypto.randomUUID();
+}
+
 async function trackBuy(trade: Trade, tokensPerLamport: number){
     const status: Status = {
+        positionID: createID(),
         mint: trade.mint,
         address: trade.wallet,
         initialTokensPerLamport: tokensPerLamport,
@@ -170,10 +176,16 @@ async function trackBuy(trade: Trade, tokensPerLamport: number){
     queue.push(status);
     const trackingFile = `./tracking/${trade.mint}.json`;
     if(!fs.existsSync(trackingFile)){
-        fs.writeFileSync(trackingFile, JSON.stringify([-1]));
+        fs.writeFileSync(trackingFile, JSON.stringify([{
+            amount: -1,
+            id: status.positionID
+        }]));
     }else{
         const trackingData = JSON.parse(fs.readFileSync(trackingFile, "utf8"));
-        trackingData.push(-1);
+        trackingData.push({
+            amount: -1,
+            id: status.positionID
+        });
         fs.writeFileSync(trackingFile, JSON.stringify(trackingData));
     }
 }
@@ -184,7 +196,10 @@ async function sellThird(status: Status){
     const sellAmount = (status.initialTokensPerLamport / currentTokensPerLamport) / 3;
     const trackingFile = `./tracking/${status.mint}.json`;
     const trackingData = JSON.parse(fs.readFileSync(trackingFile, "utf8"));
-    trackingData.push(sellAmount);
+    trackingData.push({
+        amount: sellAmount,
+        id: status.positionID
+    });
     fs.writeFileSync(trackingFile, JSON.stringify(trackingData));
     if(status.waitingForSell < 3){
         queue.push({
