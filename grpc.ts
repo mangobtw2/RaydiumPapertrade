@@ -11,7 +11,9 @@ import { grpcExistsMigration, grpcTransactionToTrades, tradeToPrice } from "./co
 import bs58 from "bs58";
 import { fileURLToPath } from 'url';
 import fs from "fs";
+import { promisify } from 'util';
 
+const writeFileAsync = promisify(fs.writeFile);
 
 const logger = createLogger(fileURLToPath(import.meta.url));
 
@@ -176,7 +178,7 @@ async function trackBuy(trade: Trade, tokensPerLamport: number){
     queue.push(status);
     const trackingFile = `./tracking/${trade.mint}.json`;
     if(!fs.existsSync(trackingFile)){
-        fs.writeFileSync(trackingFile, JSON.stringify([{
+        writeFileAsync(trackingFile, JSON.stringify([{
             amount: -1,
             id: status.positionID
         }]));
@@ -186,7 +188,7 @@ async function trackBuy(trade: Trade, tokensPerLamport: number){
             amount: -1,
             id: status.positionID
         });
-        fs.writeFileSync(trackingFile, JSON.stringify(trackingData));
+        writeFileAsync(trackingFile, JSON.stringify(trackingData));
     }
 }
 
@@ -200,7 +202,7 @@ async function sellThird(status: Status){
         amount: sellAmount,
         id: status.positionID
     });
-    fs.writeFileSync(trackingFile, JSON.stringify(trackingData));
+    writeFileAsync(trackingFile, JSON.stringify(trackingData));
     if(status.waitingForSell < 3){
         queue.push({
             ...status,
