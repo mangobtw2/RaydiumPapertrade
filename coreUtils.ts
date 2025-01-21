@@ -6,7 +6,7 @@ import { SubscribeUpdateTransaction, SubscribeUpdateTransactionInfo } from "@tri
 import { getTransferSolInstructionDataCodec} from '@solana-program/system'
 import { getTransferInstructionDataCodec} from '@solana-program/token'
 import { CompiledInstruction, InnerInstructions, TokenBalance } from '@triton-one/yellowstone-grpc/dist/grpc/solana-storage.js';
-import {createLogger} from '../logger.js';
+import {createLogger} from './logger.js';
 import { RaydiumAddresses } from './apis/raydiumApi.js';
 
 const logger = createLogger(import.meta.url);
