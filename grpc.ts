@@ -29,6 +29,7 @@ const redisClient = createClient({
 
 //init function: needs to be awaited before running
 export async function init(){
+    //await redisClient.flushAll();
     await redisClient.connect();
     try{
         try{
@@ -182,7 +183,7 @@ async function trackBuy(trade: Trade, tokensPerLamport: number){
     queue.push(status);
     
     // Store in Redis instead of file
-    await redisClient.hSet(`tracking:${trade.mint}`, status.positionID, JSON.stringify({
+    redisClient.hSet(`tracking:${trade.mint}`, status.positionID, JSON.stringify({
         amount: -1,
         id: status.positionID
     }));
@@ -194,7 +195,7 @@ async function sellThird(status: Status){
     const sellAmount = (status.initialTokensPerLamport / currentTokensPerLamport) / 3;
     
     // Store in Redis instead of file
-    await redisClient.hSet(`tracking:${status.mint}`, status.positionID, JSON.stringify({
+    redisClient.hSet(`tracking:${status.mint}`, status.positionID, JSON.stringify({
         amount: sellAmount,
         id: status.positionID
     }));
