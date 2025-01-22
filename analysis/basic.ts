@@ -5,7 +5,7 @@ const redisClient = createClient({
   url: 'redis://localhost:6379',
 });
 
-async function init(){
+export async function init(){
     await redisClient.connect();
 }
 
