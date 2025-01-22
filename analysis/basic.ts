@@ -41,7 +41,7 @@ export async function analyzeWallets(maxWallets: number = 2000): Promise<WalletP
 
     // 4. Filter by trade count
     const tradeCount = pnls.length;
-    if (tradeCount < 8 || tradeCount > 50) {
+    if (tradeCount < 5 || tradeCount > 50) {
       continue; // skip this wallet
     }
 
