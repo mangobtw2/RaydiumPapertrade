@@ -22,15 +22,22 @@ let stream: ClientDuplexStream<SubscribeRequest, SubscribeUpdate>;
 let tokensPerLamportMap = new Map<string, number>();
 
 const redisClient = createClient({
-    url: 'redis://localhost:6379'  // adjust URL as needed
+    url: 'redis://localhost:6379',
+    socket: {
+        reconnectStrategy: retries => Math.min(retries * 50, 1000)
+    }
 });
 
 // +++ INITIALIZATION & SETUP +++
 
 //init function: needs to be awaited before running
-export async function init(){
+export async function init(clearMemory: boolean = false){
     await redisClient.connect();
-    //await redisClient.flushAll();
+    
+    if (clearMemory) {
+        await clearRedisMemory();
+    }
+    
     try{
         try{
             stream.end();
@@ -207,4 +214,20 @@ async function sellThird(status: Status){
             waitingForSell: status.waitingForSell + 1
         })
     }
+}
+
+// Add these functions for memory management
+export async function clearRedisMemory() {
+    try {
+        await redisClient.flushAll();
+        logger.info('Redis memory cleared successfully');
+    } catch (error) {
+        logger.error('Error clearing Redis memory:', error);
+    }
+}
+
+// Optional: Add a function to get memory usage
+export async function getRedisMemoryInfo() {
+    const info = await redisClient.info('memory');
+    return info;
 }
