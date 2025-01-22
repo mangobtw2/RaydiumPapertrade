@@ -191,8 +191,10 @@ async function trackBuy(trade: Trade, tokensPerLamport: number){
     
     // Use Redis List to append trade data for the wallet
     await redisClient.lPush(`trades:${trade.wallet}`, JSON.stringify({
-        id: status.positionID,
-        amount: -1  // negative for buy
+        positionID: status.positionID,
+        amount: -1,  // negative for buy
+        timestamp: Date.now(),
+        mint: trade.mint
     }));
 }
 
@@ -203,16 +205,18 @@ async function sellThird(status: Status){
     
     // Append sell trade to the wallet's trade list
     await redisClient.lPush(`trades:${status.address}`, JSON.stringify({
-        id: status.positionID,  // same ID to connect with buy
-        amount: sellAmount  // positive for sell
+        positionID: status.positionID,  // same ID to connect with buy
+        amount: sellAmount,  // positive for sell
+        timestamp: Date.now(),
+        mint: status.mint
     }));
 
-    if(status.waitingForSell < 3){
+    if(status.waitingForSell < 3) {
         queue.push({
             ...status,
             waitingForTimestamp: status.waitingForTimestamp + 1000 * 60,
             waitingForSell: status.waitingForSell + 1
-        })
+        });
     }
 }
 
