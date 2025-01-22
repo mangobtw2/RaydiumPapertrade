@@ -66,6 +66,36 @@ export async function analyzeWallets(maxWallets: number = 2000): Promise<WalletP
 }
 
 
+async function getWalletPnlStatsNOUSE(key: string): Promise<WalletPnLStats>{
+    // Extract the wallet address from the key "trades:xyz"
+    const address = key.replace('trades:', '');
+
+    // 2. Load all trades
+    const rawTrades = await redisClient.lRange(key, 0, -1);
+
+    // 3. Parse and compute PnLs
+    const trades: Trade[] = rawTrades.map((row) => JSON.parse(row) as Trade);
+    const pnls = computePnLsForWallet(trades);
+
+    // 4. Filter by trade count
+    const tradeCount = pnls.length;
+
+    // 5. Compute stats
+    const { average, median, standardDeviation } = computeStatistics(pnls);
+
+    // 6. Compute confidence-based score
+    const confidenceScore = computeConfidenceScore(average, standardDeviation, tradeCount);
+
+    return {
+        address,
+        tradeCount,
+        pnlList: pnls,
+        averagePnl: average,
+        medianPnl: median,
+        standardDev: standardDeviation,
+        confidenceScore,
+      }
+}
 
 
 /**
