@@ -22,7 +22,7 @@ let stream: ClientDuplexStream<SubscribeRequest, SubscribeUpdate>;
 let tokensPerLamportMap = new Map<string, number>();
 
 const redisClient = createClient({
-    url: 'redis://localhost:6379',
+    url: 'redis://localhost:16379',
     socket: {
         reconnectStrategy: retries => Math.min(retries * 50, 1000)
     }
