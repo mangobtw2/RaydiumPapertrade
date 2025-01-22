@@ -182,10 +182,10 @@ async function trackBuy(trade: Trade, tokensPerLamport: number){
     }
     queue.push(status);
     
-    // Store in Redis instead of file
-    redisClient.hSet(`tracking:${trade.mint}`, status.positionID, JSON.stringify({
-        amount: -1,
-        id: status.positionID
+    // Use Redis List to append trade data for the wallet
+    await redisClient.lPush(`trades:${trade.wallet}`, JSON.stringify({
+        id: status.positionID,
+        amount: -1  // negative for buy
     }));
 }
 
@@ -194,10 +194,10 @@ async function sellThird(status: Status){
     if(!currentTokensPerLamport) return;
     const sellAmount = (status.initialTokensPerLamport / currentTokensPerLamport) / 3;
     
-    // Store in Redis instead of file
-    redisClient.hSet(`tracking:${status.mint}`, status.positionID, JSON.stringify({
-        amount: sellAmount,
-        id: status.positionID
+    // Append sell trade to the wallet's trade list
+    await redisClient.lPush(`trades:${status.address}`, JSON.stringify({
+        id: status.positionID,  // same ID to connect with buy
+        amount: sellAmount  // positive for sell
     }));
 
     if(status.waitingForSell < 3){
