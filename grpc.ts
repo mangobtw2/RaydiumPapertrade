@@ -92,26 +92,16 @@ export async function init(clearMemory: boolean = false){
         await init();
     }
 }
-// let messageCount = 0;
 // let lastLog = Date.now();
-// let bytesReceived = 0;
 //sets up the event handlers for the gRPC stream
 function setupStreamEventHandlers(stream: ClientDuplexStream<SubscribeRequest, SubscribeUpdate>){
     stream.on("data", async (data: SubscribeUpdate) => {
-        // messageCount++;
-        // bytesReceived += JSON.stringify(data).length; // approximate size
 
-        // // Log stats every second
         // const now = Date.now();
         // if (now - lastLog >= 1000) {
         //     console.log({
-        //         messagesPerSecond: messageCount,
-        //         mbPerSecond: (bytesReceived / 1024 / 1024).toFixed(2),
-        //         avgMessageSize: (bytesReceived / messageCount).toFixed(2),
         //         time: data.createdAt?.toTimeString()
         //     });
-        //     messageCount = 0;
-        //     bytesReceived = 0;
         //     lastLog = now;
         // }
 
