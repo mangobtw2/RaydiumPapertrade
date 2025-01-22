@@ -23,7 +23,12 @@ export async function analyzeWallets(maxWallets: number = 2000): Promise<WalletP
 
   const results: WalletPnLStats[] = [];
 
+  let analyzingIndex = 0;
   for (const key of allKeys) {
+    analyzingIndex++;
+    if (analyzingIndex % 1000 == 0) {
+        console.log(`Analyzing wallet ${analyzingIndex} of ${allKeys.length}`);
+    }
     // Extract the wallet address from the key "trades:xyz"
     const address = key.replace('trades:', '');
 
