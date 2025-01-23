@@ -68,23 +68,36 @@ export async function analyzeWallets(maxWallets: number = 2000): Promise<WalletP
   // 8. Sort by confidenceScore descending
   results.sort((a, b) => b.confidenceScore - a.confidenceScore);
 
-  // 9. return top N which pass raydium filter
-  const returnList: WalletPnLStats[] = []
-  while(returnList.length < maxWallets){
-    const wallet = results.shift();
-    if(!wallet){
-        break;
-    }
-    const rawTrades = await redisClient.lRange(`trades:${wallet.address}`, 0, -1);
-    const trades: Trade[] = rawTrades.map((row) => JSON.parse(row) as Trade);
-    const isRaydium = await checkRaydium(trades);
-    if(isRaydium){
-        returnList.push(wallet);
-        console.log(`Added ${returnList.length} wallets to return list`);
+  // 9. Process wallets in parallel batches of 20
+  const returnList: WalletPnLStats[] = [];
+  const batchSize = 20;
+
+  while (returnList.length < maxWallets && results.length > 0) {
+    // Take next batch of wallets to process
+    const batch = results.splice(0, batchSize);
+    
+    // Process batch in parallel
+    const batchResults = await Promise.all(
+      batch.map(async (wallet) => {
+        const rawTrades = await redisClient.lRange(`trades:${wallet.address}`, 0, -1);
+        const trades: Trade[] = rawTrades.map((row) => JSON.parse(row) as Trade);
+        const isRaydium = await checkRaydium(trades);
+        return isRaydium ? wallet : null;
+      })
+    );
+
+    // Add valid wallets to return list
+    const validWallets = batchResults.filter((w): w is WalletPnLStats => w !== null);
+    returnList.push(...validWallets);
+    console.log(`Added batch results. Current return list size: ${returnList.length}`);
+
+    if (returnList.length >= maxWallets) {
+      returnList.length = maxWallets; // Trim to exact size if we went over
+      break;
     }
   }
 
-  // 9. Return top N (e.g., top 2000)
+  // 10. Return results
   return returnList;
 }
 
