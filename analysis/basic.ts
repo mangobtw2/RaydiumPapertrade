@@ -189,8 +189,30 @@ function computePnLsForWallet(trades: Trade[]): number[] {
     // Group trades by positionID
     const positions = new Map<string, { buyFound: boolean; sellAmounts: number[] }>();
 
+    let firstBuyTimestampMap = new Map<string, number>();
+    let firstBuyTradeMap = new Map<string, Trade>();
+
     // filter out the non-first buys for every token mint, ranked by timestamp
-    let filteredTrades = trades.filter((trade) => !trades.some(t => t.mint === trade.mint && t.timestamp < trade.timestamp));
+    //let filteredTrades = trades.filter((trade) => !trades.some(t => t.mint === trade.mint && t.timestamp < trade.timestamp));
+    let filteredTrades: Trade[] = [];
+    for(const trade of trades){
+        if(trade.amount < 0){
+            if(!firstBuyTimestampMap.has(trade.mint)){
+                firstBuyTimestampMap.set(trade.mint, trade.timestamp);
+                firstBuyTradeMap.set(trade.mint, trade);
+            }else{
+                if(trade.timestamp < firstBuyTimestampMap.get(trade.mint)!){
+                    firstBuyTimestampMap.set(trade.mint, trade.timestamp);
+                    firstBuyTradeMap.set(trade.mint, trade);
+                }
+            }
+        }else{
+            filteredTrades.push(trade);
+        }
+    }
+    firstBuyTradeMap.forEach((trade) => {
+        filteredTrades.push(trade);
+    });
 
     for (const trade of filteredTrades) {
       const { positionID, amount } = trade;
