@@ -1,4 +1,5 @@
 import { createClient } from 'redis';
+import fs from 'fs';
 
 // Create or reuse your Redis client
 const redisClient = createClient({
@@ -202,14 +203,14 @@ function computePnLsForWallet(trades: Trade[]): number[] {
 
 
 
-interface Trade {
+export interface Trade {
     positionID: string;
     amount: number;      // -1 means "bought for 1 SOL"; positive means partial sells
     timestamp: number;
     mint: string;        // e.g., "3Jy9X..."
   }
   
-  interface WalletPnLStats {
+export interface WalletPnLStats {
     address: string;
     tradeCount: number;             // number of completed buy positions
     pnlList: number[];              // PnL for each completed position
