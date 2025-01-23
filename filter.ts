@@ -14,27 +14,23 @@ async function isFromPump(mint: string){
 export async function checkRaydium(trades: Trade[]){
     const tradedMints = trades.map(trade => trade.mint);
     //check 1: if no pump trades, filter out
-    let existsNonPump = tradedMints.some(mint => mint.endsWith('pump'));
-    if(!existsNonPump){
+    let existsPump = tradedMints.some(mint => mint.endsWith('pump'));
+    if(!existsPump){
         return false;
     }
-    //check 2: if not all trades are pump trades, pass
-    const isAllPump = tradedMints.every(mint => mint.endsWith('pump'));
-    if(!isAllPump){
-        return true;
-    }
-    //check 3: if all trades are pump trades, check up to 3 pump mints if they are actually from pump.fun
-    const mintSet = new Set(tradedMints);
+    // check 2: check 3 pump mints if they are actually from pump.fun
+    const pumpMints = tradedMints.filter(mint => mint.endsWith('pump'));
+    const pumpMintsSet = new Set(pumpMints);
     let iteration = 0;
-    for(const mint of mintSet){
+    for(const mint of pumpMintsSet){
         const isPump = await isFromPump(mint);
-        if(isPump){
-            return true;
+        if(!isPump){
+            return false;
         }
         iteration++;
         if(iteration >= 3){
-            return false;
+            return true;
         }
     }
-    return false;
+    return true;
 }
