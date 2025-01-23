@@ -71,6 +71,9 @@ export async function analyzeWallets(maxWallets: number = 2000): Promise<WalletP
   // 9. return top N which pass raydium filter
   const returnList: WalletPnLStats[] = []
   while(returnList.length < maxWallets){
+    if(returnList.length % 100 == 0){
+        console.log(`Added ${returnList.length} wallets to return list`);
+    }
     const wallet = results.shift();
     if(!wallet){
         break;
