@@ -1,4 +1,5 @@
 import { createClient } from 'redis';
+import { checkRaydium } from '../filter.js';
 import fs from 'fs';
 
 // Create or reuse your Redis client
@@ -67,8 +68,23 @@ export async function analyzeWallets(maxWallets: number = 2000): Promise<WalletP
   // 8. Sort by confidenceScore descending
   results.sort((a, b) => b.confidenceScore - a.confidenceScore);
 
+  // 9. return top N which pass raydium filter
+  const returnList: WalletPnLStats[] = []
+  while(returnList.length < maxWallets){
+    const wallet = results.shift();
+    if(!wallet){
+        break;
+    }
+    const rawTrades = await redisClient.lRange(`trades:${wallet.address}`, 0, -1);
+    const trades: Trade[] = rawTrades.map((row) => JSON.parse(row) as Trade);
+    const isRaydium = await checkRaydium(trades);
+    if(isRaydium){
+        returnList.push(wallet);
+    }
+  }
+
   // 9. Return top N (e.g., top 2000)
-  return results.slice(0, maxWallets);
+  return returnList;
 }
 
 
@@ -165,13 +181,18 @@ function computeStatistics(values: number[]): {
  * Given a list of raw trade objects (each with positionID, amount, etc.),
  * group them by positionID and compute the PnL for each completed position.
  * 
+ * Only considers the first position per token mint, ranked by buy timestamp, filters out the rest.
+ * 
  * Returns an array of PnLs (one per completed position).
  */
 function computePnLsForWallet(trades: Trade[]): number[] {
     // Group trades by positionID
     const positions = new Map<string, { buyFound: boolean; sellAmounts: number[] }>();
-  
-    for (const trade of trades) {
+
+    // filter out the non-first buys for every token mint, ranked by timestamp
+    let filteredTrades = trades.filter((trade) => !trades.some(t => t.mint === trade.mint && t.timestamp < trade.timestamp));
+
+    for (const trade of filteredTrades) {
       const { positionID, amount } = trade;
       if (!positions.has(positionID)) {
         positions.set(positionID, { buyFound: false, sellAmounts: [] });
