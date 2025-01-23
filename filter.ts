@@ -11,7 +11,7 @@ async function isFromPump(mint: string){
     return existTradesOnChain.length > 0;
 }
 
-async function checkRaydium(trades: Trade[]){
+export async function checkRaydium(trades: Trade[]){
     const tradedMints = trades.map(trade => trade.mint);
     //check 1: if no pump trades, filter out
     let existsNonPump = tradedMints.some(mint => mint.endsWith('pump'));
