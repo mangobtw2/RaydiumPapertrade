@@ -184,12 +184,20 @@ async function trackBuy(trade: Trade, tokensPerLamport: number){
     queue.push(status);
     
     // Use Redis List to append trade data for the wallet
-    await redisClient.lPush(`trades:${trade.wallet}`, JSON.stringify({
-        positionID: status.positionID,
-        amount: -1,  // negative for buy
-        timestamp: Date.now(),
-        mint: trade.mint
-    }));
+    for(let attempt = 0; attempt < 3; attempt++){
+        try{
+            await redisClient.lPush(`trades:${trade.wallet}`, JSON.stringify({
+                positionID: status.positionID,
+                amount: -1,  // negative for buy
+                timestamp: Date.now(),
+                mint: trade.mint
+            }));
+            break;
+        }catch(error){
+            console.error("Failed to append buy trade to Redis, retrying in 10 seconds...", error);
+            await new Promise(resolve => setTimeout(resolve, 10000));
+        }
+    }
 }
 
 async function sellThird(status: Status){
@@ -198,12 +206,21 @@ async function sellThird(status: Status){
     const sellAmount = (status.initialTokensPerLamport / currentTokensPerLamport) / 3;
     
     // Append sell trade to the wallet's trade list
-    await redisClient.lPush(`trades:${status.address}`, JSON.stringify({
-        positionID: status.positionID,  // same ID to connect with buy
-        amount: sellAmount,  // positive for sell
-        timestamp: Date.now(),
-        mint: status.mint
-    }));
+    for(let attempt = 0; attempt < 3; attempt++){
+        try{
+            await redisClient.lPush(`trades:${status.address}`, JSON.stringify({
+                positionID: status.positionID,  // same ID to connect with buy
+                amount: sellAmount,  // positive for sell
+                timestamp: Date.now(),
+                mint: status.mint
+            }));
+            break;
+        }catch(error){
+            console.error("Failed to sell third, retrying in 10 seconds...", error);
+            await new Promise(resolve => setTimeout(resolve, 10000));
+        }
+    }
+    
 
     if(status.waitingForSell < 3) {
         queue.push({
