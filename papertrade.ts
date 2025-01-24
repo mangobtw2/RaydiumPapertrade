@@ -257,10 +257,10 @@ async function computePnl(): Promise<number> {
   let firstBuyTradeMap = new Map<string, OurTrade>();
 
   //get all trades
-  const wallets = await redisClient.lRange(`${prefixId}:*`, 0, -1);
+  const wallets = await redisClient.keys(`${prefixId}:*`);
   let trades: OurTrade[] = [];
   for(const wallet of wallets){
-    const tradesForWallet = await redisClient.lRange(`${prefixId}:${wallet}`, 0, -1);
+    const tradesForWallet = await redisClient.lRange(wallet, 0, -1);
     for(const trade of tradesForWallet){
       const tradeData = JSON.parse(trade);
       const ourTrade: OurTrade = {
