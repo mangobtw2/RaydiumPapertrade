@@ -32,7 +32,11 @@ const redisClient = createClient({
 
 //init function: needs to be awaited before running
 export async function init(clearMemory: boolean = false){
-    await redisClient.connect();
+    try{
+        await redisClient.connect();
+    }catch(error){
+        logger.error("Failed to connect to Redis", error);
+    }
     
     if (clearMemory) {
         await clearRedisMemory();
