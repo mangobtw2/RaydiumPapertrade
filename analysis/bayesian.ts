@@ -39,6 +39,8 @@ export async function analyzeWallets(maxWallets: number = 2000): Promise<WalletP
 
   const results: WalletPnLStats[] = [];
 
+  const { priorMean, priorVar } = await estimateParameters();
+
   let analyzingIndex = 0;
   for (const key of allKeys) {
     analyzingIndex++;
@@ -66,14 +68,12 @@ export async function analyzeWallets(maxWallets: number = 2000): Promise<WalletP
 
     // 5. Compute simple stats (for reference)
     const { average, median, standardDeviation } = computeStatistics(cappedPnls);
-
-    // 5.5 Compute the prior parameters
-    const { priorMean, priorVar } = await estimateParameters();
+    
 
     // 6. Compute Bayesian-based score
     const bayesScore = computeBayesianScore(cappedPnls, {
-      priorMean: 0,    // \mu_0
-      priorVar: 0.25,  // \tau^2 = 0.25 => std dev = 0.5
+      priorMean: priorMean,    // \mu_0
+      priorVar: priorVar,  // \tau^2 = 0.25 => std dev = 0.5
       z: 1.645         // for a ~90% one-sided
     });
 
