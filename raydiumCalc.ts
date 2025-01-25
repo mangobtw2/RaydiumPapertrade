@@ -21,6 +21,3 @@ export function getOutAmount(
   //    coinOut = (coinPool * amountInAfterFee) / (pcPool + amountInAfterFee)
   return (outPool * amountInAfterFee) / (inPool + amountInAfterFee);
 }
-
-console.log(getOutAmount(	
-  303591128447441n, 58973461962n, 1000000000000n));
