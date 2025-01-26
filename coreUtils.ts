@@ -575,7 +575,7 @@ export async function grpcExistsMigration(transactionUpdate: SubscribeUpdateTran
 }
 
 type PoolBalance = {
-    marketId: string;
+    ammId: string;
     solPool: bigint;
     tokenPool: bigint;
 }
@@ -608,7 +608,7 @@ export async function grpcTransactionToPoolBalances(transactionUpdate: Subscribe
         try{
             if(instruction.programIdIndex == raydiumAccountIndex && instruction.data[0] == 9){
                 //we now know that instruction is a raydium swap instruction
-                const marketId = accountKeys[instruction.accounts[instruction.accounts.length == 18 ? 8 : 7]];
+                const ammId = accountKeys[instruction.accounts[1]];
 
                 const pool1balance = postTokenBalances.find(balance => balance.accountIndex == instruction.accounts[instruction.accounts.length == 18 ? 5 : 4]);
                 const pool2balance = postTokenBalances.find(balance => balance.accountIndex == instruction.accounts[instruction.accounts.length == 18 ? 6 : 5]);
@@ -629,7 +629,7 @@ export async function grpcTransactionToPoolBalances(transactionUpdate: Subscribe
                 if(isPool2Wsol){
                     // pool2 is wsol, pool1 is non-wsol
                     poolBalances.push({
-                        marketId: bs58.encode(marketId),
+                        ammId: bs58.encode(ammId),
                         solPool: BigInt(pool2balance.uiTokenAmount.amount),
                         tokenPool: BigInt(pool1balance.uiTokenAmount.amount)
                     });
@@ -637,7 +637,7 @@ export async function grpcTransactionToPoolBalances(transactionUpdate: Subscribe
                 if(isPool1Wsol){
                     // pool1 is wsol, pool2 is non-wsol
                     poolBalances.push({
-                        marketId: bs58.encode(marketId),
+                        ammId: bs58.encode(ammId),
                         solPool: BigInt(pool1balance.uiTokenAmount.amount),
                         tokenPool: BigInt(pool2balance.uiTokenAmount.amount)
                     });
@@ -655,7 +655,7 @@ export async function grpcTransactionToPoolBalances(transactionUpdate: Subscribe
             try{
                 if(innerInstruction.programIdIndex == raydiumAccountIndex && innerInstruction.data[0] == 9){
                     // we now know that this is a raydium swap instruction
-                    const marketId = accountKeys[innerInstruction.accounts[innerInstruction.accounts.length == 18 ? 8 : 7]];
+                    const ammId = accountKeys[innerInstruction.accounts[1]];
                     
                     const pool1balance = postTokenBalances.find(balance => balance.accountIndex == innerInstruction.accounts[innerInstruction.accounts.length == 18 ? 5 : 4]);
                     const pool2balance = postTokenBalances.find(balance => balance.accountIndex == innerInstruction.accounts[innerInstruction.accounts.length == 18 ? 6 : 5]);
@@ -676,7 +676,7 @@ export async function grpcTransactionToPoolBalances(transactionUpdate: Subscribe
                     if(isPool2Wsol){
                         // pool2 is wsol, pool1 is non-wsol
                         poolBalances.push({
-                            marketId: bs58.encode(marketId),
+                            ammId: bs58.encode(ammId),
                             solPool: BigInt(pool2balance.uiTokenAmount.amount),
                             tokenPool: BigInt(pool1balance.uiTokenAmount.amount)
                         });
@@ -684,7 +684,7 @@ export async function grpcTransactionToPoolBalances(transactionUpdate: Subscribe
                     if(isPool1Wsol){
                         // pool1 is wsol, pool2 is non-wsol
                         poolBalances.push({
-                            marketId: bs58.encode(marketId),
+                            ammId: bs58.encode(ammId),
                             solPool: BigInt(pool1balance.uiTokenAmount.amount),
                             tokenPool: BigInt(pool2balance.uiTokenAmount.amount)
                         });

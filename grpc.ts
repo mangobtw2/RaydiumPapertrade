@@ -22,7 +22,7 @@ let stream: ClientDuplexStream<SubscribeRequest, SubscribeUpdate>;
 
 //let tokensPerLamportMap = new Map<string, number>();
 //map from market ids to pool balances
-let poolBalancesByMarketId = new Map<string, {solPool: bigint, tokenPool: bigint}>();
+let poolBalancesByAmmId = new Map<string, {solPool: bigint, tokenPool: bigint}>();
 
 const redisClient = createClient({
     url: 'redis://localhost:6379',
@@ -151,7 +151,7 @@ setInterval(() => {
 type Status = {
     positionID: string;
     mint: string;
-    marketId: string;
+    ammId: string;
     address: string;
     tokensBought: bigint;
     waitingForTimestamp: number; //waiting for timestamp
@@ -159,7 +159,7 @@ type Status = {
 }
 
 type PoolBalance = {
-    marketId: string;
+    ammId: string;
     solPool: bigint;
     tokenPool: bigint;
 }
@@ -171,7 +171,7 @@ async function handleTransactionUpdate(data: SubscribeUpdate){
     let poolBalance: PoolBalance | undefined;
     if(poolBalances){
         poolBalance = poolBalances[0];
-        poolBalancesByMarketId.set(poolBalance.marketId, {
+        poolBalancesByAmmId.set(poolBalance.ammId, {
             solPool: poolBalance.solPool,
             tokenPool: poolBalance.tokenPool
         });
@@ -181,7 +181,7 @@ async function handleTransactionUpdate(data: SubscribeUpdate){
         if(trades){
             const trade = trades[0];
             if(trade.direction == "buy"){
-                trackBuy(trade, poolBalance.marketId);
+                trackBuy(trade, poolBalance.ammId);
             }
         }
     }
@@ -192,11 +192,11 @@ function createID(){
     return crypto.randomUUID();
 }
 
-async function trackBuy(trade: Trade, marketId: string){
+async function trackBuy(trade: Trade, ammId: string){
     const status: Status = {
         positionID: createID(),
         mint: trade.mint,
-        marketId: marketId,
+        ammId: ammId,
         address: trade.wallet,
         tokensBought: 0n,
         waitingForTimestamp: Date.now() + 1000 * 1.5, //wait for 1.5 seconds before buying
@@ -206,7 +206,7 @@ async function trackBuy(trade: Trade, marketId: string){
 }
 
 async function processStatus(status: Status){
-    const poolBalance = poolBalancesByMarketId.get(status.marketId);
+    const poolBalance = poolBalancesByAmmId.get(status.ammId);
     if(!poolBalance) return;
     if(status.waitingFor == 0){
         //adding buy to redis & status for waitng for sell
@@ -214,7 +214,7 @@ async function processStatus(status: Status){
         const newStatus: Status = {
             positionID: status.positionID,
             mint: status.mint,
-            marketId: status.marketId,
+            ammId: status.ammId,
             address: status.address,
             tokensBought: tokensBought,
             waitingForTimestamp: Date.now() + 1000 * 165,
