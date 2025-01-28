@@ -200,6 +200,7 @@ function createID(){
 }
 
 async function trackBuy(trade: Trade, ammId: string){
+    if(trade.lamports < 150000000n) return;
     const status: Status = {
         positionID: createID(),
         mint: trade.mint,
