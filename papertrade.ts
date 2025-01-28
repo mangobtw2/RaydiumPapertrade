@@ -199,8 +199,15 @@ function createID(){
     return crypto.randomUUID();
 }
 
+let addressBoughtMintMap = new Map<string, Map<string, boolean>>();
+
 async function trackBuy(trade: Trade, ammId: string){
     if(trade.lamports < 150000000n) return;
+    if(!addressBoughtMintMap.has(trade.wallet)) addressBoughtMintMap.set(trade.wallet, new Map<string, boolean>());
+    const mintMap = addressBoughtMintMap.get(trade.wallet)!;
+    if(mintMap.get(trade.mint)) return;
+    mintMap.set(trade.mint, true);
+
     const status: Status = {
         positionID: createID(),
         mint: trade.mint,
@@ -274,6 +281,8 @@ async function sellThird(status: Status){
             waitingForTimestamp: status.waitingForTimestamp + 1000 * 60,
             waitingFor: status.waitingFor + 1
         });
+    }else{
+        addressBoughtMintMap.get(status.address)!.set(status.mint, false);
     }
 }
 
