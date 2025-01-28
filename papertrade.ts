@@ -303,7 +303,7 @@ export async function getRedisMemoryInfo() {
 
 //pnl computation
 
-async function computePnl(): Promise<number> {
+export async function computePnl(): Promise<number> {
   // Group trades by positionID
   const positions = new Map<string, { buyFound: boolean; sellAmounts: number[] }>();
 
