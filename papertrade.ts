@@ -7,19 +7,22 @@ import * as config from './config.js';
 import { createLogger } from "./logger.js";
 import { Type } from "typescript";
 import { Trade } from "./tradeTypes.js";
-import { grpcExistsMigration, grpcTransactionToTrades, tradeToPrice } from "./coreUtils.js";
+import { grpcExistsMigration, grpcTransactionToPoolBalances, grpcTransactionToTrades, tradeToPrice } from "./coreUtils.js";
 import bs58 from "bs58";
 import { fileURLToPath } from 'url';
 import fs from "fs";
 import { createClient } from 'redis';
-
+import { getOutAmount } from "./raydiumCalc.js";
 
 const logger = createLogger(fileURLToPath(import.meta.url));
 
 const client = new Client(config.grpc_url, undefined, {});
 let stream: ClientDuplexStream<SubscribeRequest, SubscribeUpdate>;
 
-let tokensPerLamportMap = new Map<string, number>();
+
+//let tokensPerLamportMap = new Map<string, number>();
+//map from market ids to pool balances
+let poolBalancesByAmmId = new Map<string, {solPool: bigint, tokenPool: bigint}>();
 
 const redisClient = createClient({
     url: 'redis://localhost:6379',
@@ -155,22 +158,38 @@ setInterval(() => {
 type Status = {
     positionID: string;
     mint: string;
+    ammId: string;
     address: string;
-    initialTokensPerLamport: number;
+    tokensBought: bigint;
     waitingForTimestamp: number; //waiting for timestamp
-    waitingForSell: number; //waiting for sell 1, 2 or 3
+    waitingFor: number; //waiting for sell (1, 2 or 3) or buy (0)
+}
+
+type PoolBalance = {
+    ammId: string;
+    solPool: bigint;
+    tokenPool: bigint;
 }
 
 async function handleTransactionUpdate(data: SubscribeUpdate){
     if(!data.transaction) return;
-    const trades = await grpcTransactionToTrades(data.transaction);
-    if(trades){
-        for(const trade of trades){
-            if(!wallets.includes(trade.wallet)) continue;
-            const tokensPerLamport = Number(trade.tokens) / Number(trade.lamports);
-            tokensPerLamportMap.set(trade.mint, tokensPerLamport);
+    //step 1: update pool balances
+    const poolBalances = await grpcTransactionToPoolBalances(data.transaction);
+    let poolBalance: PoolBalance | undefined;
+    if(poolBalances){
+        poolBalance = poolBalances[0];
+        poolBalancesByAmmId.set(poolBalance.ammId, {
+            solPool: poolBalance.solPool,
+            tokenPool: poolBalance.tokenPool
+        });
+
+        //step 2: update trades
+        const trades = await grpcTransactionToTrades(data.transaction);
+        if(trades){
+            const trade = trades[0];
+            if(!wallets.includes(trade.wallet)) return;
             if(trade.direction == "buy"){
-                trackBuy(trade, tokensPerLamport);
+                trackBuy(trade, poolBalance.ammId);
             }
         }
     }
@@ -180,44 +199,79 @@ function createID(){
     return crypto.randomUUID();
 }
 
-async function trackBuy(trade: Trade, tokensPerLamport: number){
+async function trackBuy(trade: Trade, ammId: string){
     const status: Status = {
         positionID: createID(),
         mint: trade.mint,
+        ammId: ammId,
         address: trade.wallet,
-        initialTokensPerLamport: tokensPerLamport,
-        waitingForTimestamp: Date.now() + 1000 * 165,
-        waitingForSell: 1
+        tokensBought: 0n,
+        waitingForTimestamp: Date.now() + 1000 * 1.5, //wait for 1.5 seconds before buying
+        waitingFor: 0
     }
     queue.push(status);
-    
-    // Use Redis List to append trade data for the wallet
-    await redisClient.lPush(`${prefixId}:${trade.wallet}`, JSON.stringify({
-        positionID: status.positionID,
-        amount: -1,  // negative for buy
-        timestamp: Date.now(),
-        mint: trade.mint
-    }));
 }
 
+
 async function sellThird(status: Status){
-    const currentTokensPerLamport = tokensPerLamportMap.get(status.mint);
-    if(!currentTokensPerLamport) return;
-    const sellAmount = (status.initialTokensPerLamport / currentTokensPerLamport) / 3;
+    const poolBalance = poolBalancesByAmmId.get(status.ammId);
+    if(!poolBalance) return;
+    if(status.waitingFor == 0){
+        //adding buy to redis & status for waitng for sell
+        const tokensBought = getOutAmount(poolBalance.solPool, poolBalance.tokenPool, 1000000000n); //buy for 1 sol (1000000000 lamports)
+        const newStatus: Status = {
+            positionID: status.positionID,
+            mint: status.mint,
+            ammId: status.ammId,
+            address: status.address,
+            tokensBought: tokensBought,
+            waitingForTimestamp: Date.now() + 1000 * 165,
+            waitingFor: 1
+        }
+        queue.push(newStatus);
+
+        for(let attempt = 0; attempt < 3; attempt++){
+            try{
+                await redisClient.lPush(`${prefixId}:${status.address}`, JSON.stringify({
+                    positionID: status.positionID,
+                    amount: -1,  // negative for buy
+                    timestamp: Date.now(),
+                    mint: status.mint
+                }));
+                break;
+            }catch(error){
+                console.error("Failed to append buy trade to Redis, retrying in 10 seconds...", error);
+                await new Promise(resolve => setTimeout(resolve, 10000));
+            }
+        }
+        return;
+    }
+    //this is a sell status
+    const sellAmountTokens = status.tokensBought / 3n;
+    const sellAmountSol = Number(getOutAmount(poolBalance.tokenPool, poolBalance.solPool, sellAmountTokens)) / 1000000000; //getting how much we get out for selling
     
     // Append sell trade to the wallet's trade list
-    await redisClient.lPush(`${prefixId}:${status.address}`, JSON.stringify({
-        positionID: status.positionID,  // same ID to connect with buy
-        amount: sellAmount,  // positive for sell
-        timestamp: Date.now(),
-        mint: status.mint
-    }));
+    for(let attempt = 0; attempt < 3; attempt++){
+        try{
+            await redisClient.lPush(`${prefixId}:${status.address}`, JSON.stringify({
+                positionID: status.positionID,  // same ID to connect with buy
+                amount: sellAmountSol,  // positive for sell
+                timestamp: Date.now(),
+                mint: status.mint
+            }));
+            break;
+        }catch(error){
+            console.error("Failed to sell third, retrying in 10 seconds...", error);
+            await new Promise(resolve => setTimeout(resolve, 10000));
+        }
+    }
+    
 
-    if(status.waitingForSell < 3) {
+    if(status.waitingFor < 3) {
         queue.push({
             ...status,
             waitingForTimestamp: status.waitingForTimestamp + 1000 * 60,
-            waitingForSell: status.waitingForSell + 1
+            waitingFor: status.waitingFor + 1
         });
     }
 }

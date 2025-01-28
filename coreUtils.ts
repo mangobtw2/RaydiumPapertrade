@@ -574,6 +574,50 @@ export async function grpcExistsMigration(transactionUpdate: SubscribeUpdateTran
     return;
 }
 
+type BondingCurvePoolBalance = {
+    mint: string;
+    virtualSolReserves: bigint;
+    virtualTokenReserves: bigint;
+}
+
+export async function grpcTransactionToBondingCurvePoolBalances(transactionUpdate: SubscribeUpdateTransaction): Promise<BondingCurvePoolBalance[] | undefined>{
+    const transaction = transactionUpdate.transaction;
+    if(!transaction) return undefined;
+    const signature = bs58.encode(transaction.signature);
+    const accountKeys = transaction.transaction?.message?.accountKeys.concat((transaction.meta?.loadedWritableAddresses ? transaction.meta?.loadedWritableAddresses : [])).concat((transaction.meta?.loadedReadonlyAddresses ? transaction.meta?.loadedReadonlyAddresses : []));
+    const instructions = transaction.transaction?.message?.instructions;
+    const innerInstructionGroups = transaction.meta?.innerInstructions;
+    const postTokenBalances = transaction.meta?.postTokenBalances;
+    const block = Number(transactionUpdate.slot);
+    if(!accountKeys || !instructions || !innerInstructionGroups || !postTokenBalances || !block) return undefined;
+
+    let poolBalances: BondingCurvePoolBalance[] = [];
+
+    const pumpLogCodecLength = pumpLogCodec.fixedSize;
+
+    const pumpAccountIndex = accountKeys.findIndex(accountKey => Buffer.compare(accountKey, constants.PUMP_FUN_PROGRAM_ADDRESS_BYTES) == 0);
+    if(pumpAccountIndex == -1) return undefined;
+
+    for(const innerInstructionGroup of innerInstructionGroups){
+        for(const innerInstruction of innerInstructionGroup.instructions){
+            try{
+                if(innerInstruction.programIdIndex == pumpAccountIndex && innerInstruction.data.length == pumpLogCodecLength){
+                    const decoded = pumpLogCodec.decode(innerInstruction.data);
+                    poolBalances.push({
+                        mint: address(decoded.mint),
+                        virtualSolReserves: BigInt(decoded.virtualSolReserves),
+                        virtualTokenReserves: BigInt(decoded.virtualTokenReserves)
+                    });
+                }
+            }catch(error){
+                logger.error("Error parsing pump.fun anchor log instruction", error);
+                continue;
+            }
+        }
+    }
+}
+
+
 type PoolBalance = {
     ammId: string;
     solPool: bigint;
