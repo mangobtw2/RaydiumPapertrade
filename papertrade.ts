@@ -384,6 +384,7 @@ export async function computePnl(extensive: boolean = false): Promise<number> {
       const totalSells = posData.sellAmounts.reduce((acc, val) => acc + val, 0);
       const pnl = totalSells - 1; // net result of buying for 1 SOL and selling
       pnls.push(pnl);
+      if(!pnlsByWallet.has(posData.wallet)) pnlsByWallet.set(posData.wallet, []);
       pnlsByWallet.get(posData.wallet)!.push(pnl);
     }
   });
