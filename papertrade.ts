@@ -313,9 +313,9 @@ export async function getRedisMemoryInfo() {
 
 //pnl computation
 
-export async function computePnl(): Promise<number> {
+export async function computePnl(extensive: boolean = false): Promise<number> {
   // Group trades by positionID
-  const positions = new Map<string, { buyFound: boolean; sellAmounts: number[] }>();
+  const positions = new Map<string, { buyFound: boolean; sellAmounts: number[]; wallet: string }>();
 
   let firstBuyTimestampMap = new Map<string, number>();
   let firstBuyTradeMap = new Map<string, OurTrade>();
@@ -331,7 +331,8 @@ export async function computePnl(): Promise<number> {
         positionID: tradeData.positionID,
         amount: tradeData.amount,
         timestamp: tradeData.timestamp,
-        mint: tradeData.mint
+        mint: tradeData.mint,
+        wallet: wallet.split(":")[1]
       }
       trades.push(ourTrade);
     }
@@ -361,7 +362,7 @@ export async function computePnl(): Promise<number> {
   for (const trade of filteredTrades) {
     const { positionID, amount } = trade;
     if (!positions.has(positionID)) {
-      positions.set(positionID, { buyFound: false, sellAmounts: [] });
+      positions.set(positionID, { buyFound: false, sellAmounts: [], wallet: trade.wallet });
     }
 
     const pos = positions.get(positionID)!;
@@ -376,14 +377,27 @@ export async function computePnl(): Promise<number> {
 
   // Now compute PnLs
   const pnls: number[] = [];
+  const pnlsByWallet: Map<string, number[]> = new Map();
   positions.forEach((posData) => {
     // we only consider positions with exactly 3 sells in your example
     if (posData.buyFound && posData.sellAmounts.length === 3) {
       const totalSells = posData.sellAmounts.reduce((acc, val) => acc + val, 0);
       const pnl = totalSells - 1; // net result of buying for 1 SOL and selling
       pnls.push(pnl);
+      pnlsByWallet.get(posData.wallet)!.push(pnl);
     }
   });
+
+  if(extensive){
+    let walletPnls: {wallet: string, pnlList: number[], totalPnl: number}[] = [];
+    for(const wallet of pnlsByWallet.keys()){
+      const pnlList = pnlsByWallet.get(wallet)!;
+      const totalPnl = pnlList.reduce((acc, val) => acc + val, 0);
+      walletPnls.push({wallet, pnlList, totalPnl});
+    }
+    walletPnls.sort((a, b) => a.totalPnl - b.totalPnl);
+    console.log(walletPnls);
+  }
 
   //sum of all pnl
   return pnls.reduce((acc, val) => acc + val, 0);
@@ -395,6 +409,7 @@ export interface OurTrade {
     amount: number;      // -1 means "bought for 1 SOL"; positive means partial sells
     timestamp: number;
     mint: string;        // e.g., "3Jy9X..."
+    wallet: string;
   }
   
 export interface WalletPnLStats {
