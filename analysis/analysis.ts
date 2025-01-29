@@ -138,7 +138,6 @@ export async function getWalletPnlStatsNOUSE(key: string): Promise<any>{
     // 5. Compute stats
     const { average, median, standardDeviation } = computeStatistics(pnls);
 
-
     return {
         address,
         tradeCount,
