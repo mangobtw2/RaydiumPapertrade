@@ -339,7 +339,7 @@ export async function getRedisMemoryInfo() {
 
 //pnl computation
 
-export async function computePnl(prefixId: string, extensive: boolean = false): Promise<number> {
+export async function computePnl(prefixId: string, extensive: boolean = false): Promise<{pnl: number, amountOfTrades: number}> {
   // Group trades by positionID
   const positions = new Map<string, { buyFound: boolean; sellAmounts: number[]; wallet: string }>();
 
@@ -427,7 +427,7 @@ export async function computePnl(prefixId: string, extensive: boolean = false): 
   }
 
   //sum of all pnl
-  return pnls.reduce((acc, val) => acc + val, 0);
+  return {pnl: pnls.reduce((acc, val) => acc + val, 0), amountOfTrades: pnls.length};
 }
 
 
@@ -453,6 +453,7 @@ export interface WalletPnLStats {
 interface PnLDataPoint {
     timestamp: number;
     pnl: number;
+    amountOfTrades: number;
 }
 
 interface PnLHistory {
@@ -479,7 +480,7 @@ setInterval(async () => {
     
     for(const prefixId of prefixToWalletsMap.keys()) {
         const pnl = await computePnl(prefixId);
-        console.log(`PnL for prefix ${prefixId}: ${pnl}`);
+        console.log(`PnL for prefix ${prefixId}: ${pnl.pnl} (${pnl.amountOfTrades} trades)`);
         
         // Update history
         if (!history[prefixId]) {
@@ -487,7 +488,8 @@ setInterval(async () => {
         }
         history[prefixId].push({
             timestamp: Date.now(),
-            pnl: pnl
+            pnl: pnl.pnl,
+            amountOfTrades: pnl.amountOfTrades
         });
     }
     
