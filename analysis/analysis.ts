@@ -1,6 +1,10 @@
 import { createClient } from 'redis';
 import { checkRaydium } from '../filter.js';
 import fs from 'fs';
+import { meanMinusStd } from './meanMinusStd.js';
+import { computeBayesianScore } from './bayesian.js';
+import { computeWinRateGainLossScore } from './winRateGainLoss.js';
+import { computeMedianIqrScore } from './medianMinusIqr.js';
 
 // Create or reuse your Redis client
 const redisClient = createClient({
@@ -11,6 +15,18 @@ export async function init(){
     await redisClient.connect();
 }
 
+type ScoreFunction = "meanMinusStd" | "bayesianNormalPrior" | "meanMinusIqr" | "winRateGainLoss" | "trimmedMean";
+
+function getScoreFunction(scoreFunction: ScoreFunction){
+    switch(scoreFunction){
+        case "meanMinusStd": return meanMinusStd;
+        case "bayesianNormalPrior": return computeBayesianScore;
+        case "meanMinusIqr": return computeMedianIqrScore;
+        case "winRateGainLoss": return computeWinRateGainLossScore;
+        case "trimmedMean": return computeTrimmedMean;
+    }
+}
+
 /**
  * Analyzes all wallets in Redis, returning a sorted list (descending) of 
  * the "best" wallets by a conservative confidence score. 
@@ -18,7 +34,7 @@ export async function init(){
  * @param maxWallets number of wallets to retrieve from the top
  * @returns top wallets with stats
  */
-export async function analyzeWallets(maxWallets: number = 2000): Promise<WalletPnLStats[]> {
+export async function analyzeWallets(minTradeCount: number = 15, maxTradeCount: number = 100, scoreFunction: ScoreFunction = "meanMinusStd", maxWallets: number = 2000): Promise<WalletPnLStats[]> {
   // 1. Get all wallet keys: "trades:<address>"
   const allKeys = await redisClient.keys('trades:*');
   console.log(`Found ${allKeys.length} wallet keys.`);
@@ -43,15 +59,16 @@ export async function analyzeWallets(maxWallets: number = 2000): Promise<WalletP
 
     // 4. Filter by trade count
     const tradeCount = pnls.length;
-    if (tradeCount < 6 || tradeCount > 50) {
+    if (tradeCount < minTradeCount || tradeCount > maxTradeCount) {
       continue; // skip this wallet
     }
 
     // 5. Compute stats
     const { average, median, standardDeviation } = computeStatistics(pnls);
-
-    // 6. Compute confidence-based score
-    const confidenceScore = computeConfidenceScore(average, standardDeviation, tradeCount);
+    
+    
+    const computeScore = getScoreFunction(scoreFunction);
+    const score = computeScore(pnls);
 
     // 7. Push into results array
     results.push({
@@ -61,12 +78,12 @@ export async function analyzeWallets(maxWallets: number = 2000): Promise<WalletP
       averagePnl: average,
       medianPnl: median,
       standardDev: standardDeviation,
-      confidenceScore,
+      score: score,
     });
   }
 
-  // 8. Sort by confidenceScore descending
-  results.sort((a, b) => b.confidenceScore - a.confidenceScore);
+  // 8. Sort by score descending
+  results.sort((a, b) => b.score - a.score);
 
   // 9. Process wallets in parallel batches of 20
   const returnList: WalletPnLStats[] = [];
@@ -97,12 +114,14 @@ export async function analyzeWallets(maxWallets: number = 2000): Promise<WalletP
     }
   }
 
+  fs.writeFileSync("results/"+scoreFunction+".json", JSON.stringify(returnList, null, 2));
+
   // 10. Return results
   return returnList;
 }
 
 
-async function getWalletPnlStatsNOUSE(key: string): Promise<WalletPnLStats>{
+export async function getWalletPnlStatsNOUSE(key: string): Promise<any>{
     // Extract the wallet address from the key "trades:xyz"
     const address = key.replace('trades:', '');
 
@@ -119,8 +138,6 @@ async function getWalletPnlStatsNOUSE(key: string): Promise<WalletPnLStats>{
     // 5. Compute stats
     const { average, median, standardDeviation } = computeStatistics(pnls);
 
-    // 6. Compute confidence-based score
-    const confidenceScore = computeConfidenceScore(average, standardDeviation, tradeCount);
 
     return {
         address,
@@ -128,8 +145,7 @@ async function getWalletPnlStatsNOUSE(key: string): Promise<WalletPnLStats>{
         pnlList: pnls,
         averagePnl: average,
         medianPnl: median,
-        standardDev: standardDeviation,
-        confidenceScore,
+        standardDev: standardDeviation
       }
 }
 
@@ -137,7 +153,7 @@ async function getWalletPnlStatsNOUSE(key: string): Promise<WalletPnLStats>{
 /**
  * Compute basic descriptive statistics (mean, median, std dev).
  */
-function computeStatistics(values: number[]): {
+export function computeStatistics(values: number[]): {
     average: number;
     median: number;
     standardDeviation: number;
@@ -170,23 +186,24 @@ function computeStatistics(values: number[]): {
   
     return { average, median, standardDeviation };
   }
-  
-  /**
-   * A simple function to compute a "confidence score" based on
-   * mean - Z * stdError. We'll use ~1.645 for a ~90% one-sided interval
-   * (you can adjust if you want).
-   * 
-   * score = avgPnl - z * (stdDev / sqrt(n))
-   */
-  function computeConfidenceScore(
-    average: number,
-    standardDeviation: number,
-    n: number,
-    z: number = 1.645
-  ): number {
-    if (n <= 1) return average; // not enough data for a true std error, fallback
-    const stdError = standardDeviation / Math.sqrt(n);
-    return average - z * stdError;
+
+  function computeTrimmedMean(values: number[], trimPercent: number = 0.1): number {
+    if(values.length == 0) return 0;
+    if(values.length == 1) return values[0];
+    const sorted = [...values].sort((a, b) => a - b).map(x => Math.min(x, 2)); //maximum pnl of 2 sol
+    const n = values.length;
+    const trimCount = Math.ceil(n * trimPercent);
+
+    //only trim the top, not the bottom
+
+    //const start = Math.min(trimCount, n - 1);
+    const start = 0;
+    const end = Math.max(n - trimCount, start);
+
+    const trimmed = sorted.slice(start, end);
+    const mean =
+      trimmed.reduce((acc, v) => acc + v, 0) / (trimmed.length || 1);
+    return mean;
   }
 
 
@@ -274,5 +291,5 @@ export interface WalletPnLStats {
     averagePnl: number;             // mean of pnlList
     medianPnl: number;              // median of pnlList
     standardDev: number;            // sample standard deviation
-    confidenceScore: number;        // used for final ranking
+    score: number;                  // score of pnlList
   }

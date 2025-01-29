@@ -33,28 +33,45 @@ const redisClient = createClient({
 
 // +++ INITIALIZATION & SETUP +++
 
-let prefixId = "paper";
-let wallets: string[] = [];
+//let prefixId = "paper";
+//let wallets: string[] = [];
+
+let prefixToWalletsMap = new Map<string, string[]>();
+let walletToPrefixesMap = new Map<string, string[]>();
+let walletSet = new Set<string>();
+
+export type InitOptions = {
+    walletsFile: string;
+    clearMemory: boolean;
+    prefixIdInput: string;
+}
 
 //init function: needs to be awaited before running
-export async function init(walletFile: string, clearMemory: boolean = false, prefixIdInput: string = ""){
+export async function init(optsList: InitOptions[]){
     try{
         await redisClient.connect();
     }catch(error){
         logger.error("Failed to connect to Redis", error);
     }
 
-    if(prefixIdInput != ""){
-        prefixId = "paper" + prefixIdInput;
-    }else{
-        prefixId = "paper" + createID().slice(0, 6);
+    // if(prefixIdInput != ""){
+    //     prefixId = "paper" + prefixIdInput;
+    // }else{
+    //     prefixId = "paper" + createID().slice(0, 6);
+    // }
+    for(const opts of optsList){
+        const prefixId = "paper" + opts.prefixIdInput;
+        const wallets = JSON.parse(fs.readFileSync(opts.walletsFile, 'utf8')).map((wallet: any) => wallet.address);
+        prefixToWalletsMap.set(prefixId, wallets);
+        for(const wallet of wallets){
+            if(!walletToPrefixesMap.has(wallet)) walletToPrefixesMap.set(wallet, []);
+            walletToPrefixesMap.get(wallet)!.push(prefixId);
+            walletSet.add(wallet);
+        }
+        if (opts.clearMemory) {
+            await clearRedisMemory(prefixId);
+        }
     }
-    
-    if (clearMemory) {
-        await clearRedisMemory();
-    }
-
-    wallets = JSON.parse(fs.readFileSync(walletFile, 'utf8')).map((wallet: any) => wallet.address);
     
     try{
         try{
@@ -96,7 +113,7 @@ export async function init(walletFile: string, clearMemory: boolean = false, pre
                     } else {
                     console.error("Failed to send gRPC stream request", err);
                     setTimeout(() => {
-                        init(walletFile);
+                        init(optsList);
                         }, 10000);
                     }
                 });
@@ -107,7 +124,7 @@ export async function init(walletFile: string, clearMemory: boolean = false, pre
     }catch(error){
         console.error("Failed to connect gRPC stream, retrying in 10 seconds...", error);
         await new Promise(resolve => setTimeout(resolve, 10000));
-        await init(walletFile);
+        await init(optsList);
     }
 }
 let lastLog = Date.now();
@@ -187,8 +204,7 @@ async function handleTransactionUpdate(data: SubscribeUpdate){
         const trades = await grpcTransactionToTrades(data.transaction);
         if(trades){
             const trade = trades[0];
-            if(!wallets.includes(trade.wallet)) return;
-            if(trade.direction == "buy"){
+            if(trade.direction == "buy" && walletSet.has(trade.wallet)){
                 trackBuy(trade, poolBalance.ammId);
             }
         }
@@ -238,39 +254,48 @@ async function sellThird(status: Status){
         }
         queue.push(newStatus);
 
-        for(let attempt = 0; attempt < 3; attempt++){
-            try{
-                await redisClient.lPush(`${prefixId}:${status.address}`, JSON.stringify({
-                    positionID: status.positionID,
-                    amount: -1,  // negative for buy
-                    timestamp: Date.now(),
-                    mint: status.mint
-                }));
-                break;
-            }catch(error){
-                console.error("Failed to append buy trade to Redis, retrying in 10 seconds...", error);
-                await new Promise(resolve => setTimeout(resolve, 10000));
+        const prefixIds = walletToPrefixesMap.get(status.address);
+        if(!prefixIds) return;
+        for(const prefixId of prefixIds){
+            for(let attempt = 0; attempt < 3; attempt++){
+                try{
+                    await redisClient.lPush(`${prefixId}:${status.address}`, JSON.stringify({
+                        positionID: status.positionID,
+                        amount: -1,  // negative for buy
+                        timestamp: Date.now(),
+                        mint: status.mint
+                    }));
+                    break;
+                }catch(error){
+                    console.error("Failed to append buy trade to Redis, retrying in 10 seconds...", error);
+                    await new Promise(resolve => setTimeout(resolve, 10000));
+                }
             }
-        }
         return;
+        }
     }
+
     //this is a sell status
     const sellAmountTokens = status.tokensBought / 3n;
     const sellAmountSol = Number(getOutAmount(poolBalance.tokenPool, poolBalance.solPool, sellAmountTokens)) / 1000000000; //getting how much we get out for selling
     
     // Append sell trade to the wallet's trade list
-    for(let attempt = 0; attempt < 3; attempt++){
-        try{
-            await redisClient.lPush(`${prefixId}:${status.address}`, JSON.stringify({
-                positionID: status.positionID,  // same ID to connect with buy
-                amount: sellAmountSol,  // positive for sell
-                timestamp: Date.now(),
-                mint: status.mint
-            }));
-            break;
-        }catch(error){
-            console.error("Failed to sell third, retrying in 10 seconds...", error);
-            await new Promise(resolve => setTimeout(resolve, 10000));
+    const prefixIds = walletToPrefixesMap.get(status.address);
+    if(!prefixIds) return;
+    for(const prefixId of prefixIds){
+        for(let attempt = 0; attempt < 3; attempt++){
+            try{
+                await redisClient.lPush(`${prefixId}:${status.address}`, JSON.stringify({
+                    positionID: status.positionID,  // same ID to connect with buy
+                    amount: sellAmountSol,  // positive for sell
+                    timestamp: Date.now(),
+                    mint: status.mint
+                }));
+                break;
+            }catch(error){
+                console.error("Failed to sell third, retrying in 10 seconds...", error);
+                await new Promise(resolve => setTimeout(resolve, 10000));
+            }
         }
     }
     
@@ -287,7 +312,7 @@ async function sellThird(status: Status){
 }
 
 // Add these functions for memory management
-export async function clearRedisMemory() {
+export async function clearRedisMemory(prefixId: string) {
     try {
         // Get all keys matching the pattern "papertradeRaydium:*"
         const keys = await redisClient.keys(`${prefixId}:*`);
@@ -313,7 +338,7 @@ export async function getRedisMemoryInfo() {
 
 //pnl computation
 
-export async function computePnl(extensive: boolean = false): Promise<number> {
+export async function computePnl(prefixId: string, extensive: boolean = false): Promise<number> {
   // Group trades by positionID
   const positions = new Map<string, { buyFound: boolean; sellAmounts: number[]; wallet: string }>();
 
@@ -424,6 +449,8 @@ export interface WalletPnLStats {
   }
 
 setInterval(async () => {
-  const pnl = await computePnl();
-  console.log(`PnL for prefix ${prefixId}: ${pnl}`);
+  for(const prefixId of prefixToWalletsMap.keys()){
+    const pnl = await computePnl(prefixId);
+    console.log(`PnL for prefix ${prefixId}: ${pnl}`);
+  }
 }, 120000);

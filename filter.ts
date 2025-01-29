@@ -1,4 +1,4 @@
-import { Trade } from "./analysis/basic.js";
+import { Trade } from "./analysis/analysis.js";
 import { Address } from "@solana/web3.js";
 import { getBondingCurveAddress } from "./coreUtils.js";
 import {rpc} from "./core/index.js"
