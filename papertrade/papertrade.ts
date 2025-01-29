@@ -339,7 +339,7 @@ export async function getRedisMemoryInfo() {
 
 //pnl computation
 
-export async function computePnl(prefixId: string, extensive: boolean = false): Promise<{pnl: number, amountOfTrades: number}> {
+export async function computePnl(prefixId: string, extensive: boolean = false, fileNameExtensive: string = ""): Promise<{pnl: number, amountOfTrades: number}> {
   // Group trades by positionID
   const positions = new Map<string, { buyFound: boolean; sellAmounts: number[]; wallet: string }>();
 
@@ -424,6 +424,9 @@ export async function computePnl(prefixId: string, extensive: boolean = false): 
     }
     walletPnls.sort((a, b) => a.totalPnl - b.totalPnl);
     console.log(walletPnls);
+    if(fileNameExtensive != ""){
+      fs.writeFileSync(fileNameExtensive, JSON.stringify(walletPnls, null, 2));
+    }
   }
 
   //sum of all pnl
