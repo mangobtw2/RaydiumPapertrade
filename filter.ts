@@ -4,11 +4,16 @@ import { getBondingCurveAddress } from "./coreUtils.js";
 import {rpc} from "./core/index.js"
 
 async function isFromPump(mint: string){
-    const bondingCurveAddress = await getBondingCurveAddress({mintPubkey: mint as Address});
-    const existTradesOnChain = await rpc.performanceRpc.getSignaturesForAddress(bondingCurveAddress, {
-        limit: 1
-    }).send();
-    return existTradesOnChain.length > 0;
+    try{
+        const bondingCurveAddress = await getBondingCurveAddress({mintPubkey: mint as Address});
+        const existTradesOnChain = await rpc.performanceRpc.getSignaturesForAddress(bondingCurveAddress, {
+            limit: 1
+        }).send();
+        return existTradesOnChain.length > 0;
+    }catch(error){
+        return false;
+    }
+    
 }
 
 export async function checkRaydium(trades: Trade[]){
