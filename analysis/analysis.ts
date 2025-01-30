@@ -57,9 +57,10 @@ export async function analyzeWallets(minTradeCount: number = 15, maxTradeCount: 
     const trades: Trade[] = rawTrades.map((row) => JSON.parse(row) as Trade);
     const pnls = computePnLsForWallet(trades);
 
-    // 4. Filter by trade count
-    const tradeCount = pnls.length;
-    if (tradeCount < minTradeCount || tradeCount > maxTradeCount) {
+    // 4. Filter by trade count (minimum unique trades, maximum total trades)
+    const uniqueTradeCount = pnls.length;
+    const totalTradeCount = trades.filter(t => t.amount < 0).length;
+    if (uniqueTradeCount < minTradeCount || totalTradeCount > maxTradeCount) {
       continue; // skip this wallet
     }
 
@@ -73,7 +74,7 @@ export async function analyzeWallets(minTradeCount: number = 15, maxTradeCount: 
     // 7. Push into results array
     results.push({
       address,
-      tradeCount,
+      tradeCount: uniqueTradeCount,
       pnlList: pnls,
       averagePnl: average,
       medianPnl: median,
