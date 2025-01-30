@@ -272,8 +272,8 @@ async function sellThird(status: Status){
                     await new Promise(resolve => setTimeout(resolve, 10000));
                 }
             }
-        return;
         }
+        return;
     }
 
     //this is a sell status
