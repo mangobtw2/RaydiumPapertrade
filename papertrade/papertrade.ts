@@ -365,27 +365,27 @@ export async function computePnl(prefixId: string, extensive: boolean = false, f
   }
 
   // filter out the non-first buys for every token mint, ranked by timestamp
-  let filteredTrades: OurTrade[] = [];
-  for(const trade of trades){
-      if(trade.amount < 0){
-          if(!firstBuyTimestampMap.has(trade.mint)){
-              firstBuyTimestampMap.set(trade.mint, trade.timestamp);
-              firstBuyTradeMap.set(trade.mint, trade);
-          } else {
-              if(trade.timestamp < firstBuyTimestampMap.get(trade.mint)!) {
-                  firstBuyTimestampMap.set(trade.mint, trade.timestamp);
-                  firstBuyTradeMap.set(trade.mint, trade);
-              }
-          }
-      } else {
-          filteredTrades.push(trade);
-      }
-  }
-  firstBuyTradeMap.forEach((trade) => {
-      filteredTrades.push(trade);
-  });
+//   let filteredTrades: OurTrade[] = [];
+//   for(const trade of trades){
+//       if(trade.amount < 0){
+//           if(!firstBuyTimestampMap.has(trade.mint)){
+//               firstBuyTimestampMap.set(trade.mint, trade.timestamp);
+//               firstBuyTradeMap.set(trade.mint, trade);
+//           } else {
+//               if(trade.timestamp < firstBuyTimestampMap.get(trade.mint)!) {
+//                   firstBuyTimestampMap.set(trade.mint, trade.timestamp);
+//                   firstBuyTradeMap.set(trade.mint, trade);
+//               }
+//           }
+//       } else {
+//           filteredTrades.push(trade);
+//       }
+//   }
+//   firstBuyTradeMap.forEach((trade) => {
+//       filteredTrades.push(trade);
+//   });
 
-  for (const trade of filteredTrades) {
+  for (const trade of trades) {
     const { positionID, amount } = trade;
     if (!positions.has(positionID)) {
       positions.set(positionID, { buyFound: false, sellAmounts: [], wallet: trade.wallet });
