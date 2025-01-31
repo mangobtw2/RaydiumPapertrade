@@ -1,4 +1,4 @@
-export function computeTrimmedMean(values: number[], trimPercent: number = 0.1): number {
+export function computeTrimmedMean(values: number[], trimPercent: number = 0.05): number {
     if(values.length == 0) return 0;
     if(values.length == 1) return values[0];
     //const sorted = [...values].sort((a, b) => a - b).map(x => Math.min(x, 2)); //maximum pnl of 2 sol
