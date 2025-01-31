@@ -81,7 +81,7 @@ export async function init(optsList: InitOptions[]){
             //
         }
         stream = await client.subscribe();
-        setupStreamEventHandlers(stream);
+        setupStreamEventHandlers(stream, optsList);
         console.log("gRPC stream initialized");
 
         let request: SubscribeRequest = {
@@ -130,7 +130,7 @@ export async function init(optsList: InitOptions[]){
 }
 let lastLog = Date.now();
 //sets up the event handlers for the gRPC stream
-function setupStreamEventHandlers(stream: ClientDuplexStream<SubscribeRequest, SubscribeUpdate>){
+function setupStreamEventHandlers(stream: ClientDuplexStream<SubscribeRequest, SubscribeUpdate>, optsList: InitOptions[]){
     stream.on("data", async (data: SubscribeUpdate) => {
 
         const now = Date.now();
@@ -150,12 +150,22 @@ function setupStreamEventHandlers(stream: ClientDuplexStream<SubscribeRequest, S
 
     stream.on("end", () => {
         console.error("gRPC stream ended");
-        stream.end();
+        try{
+            stream.end();
+            init(optsList);
+        }catch(error){
+            //
+        }
     });
 
     stream.on("close", () => {
         console.error("gRPC stream closed");
-        stream.end();
+        try{
+            stream.end();
+            init(optsList);
+        }catch(error){
+            //
+        }
     });
 }
 
