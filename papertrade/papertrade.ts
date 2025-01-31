@@ -343,7 +343,7 @@ export async function getRedisMemoryInfo() {
 
 //pnl computation
 
-export async function computePnl(prefixId: string, extensive: boolean = false, fileNameExtensive: string = ""): Promise<{pnl: number, amountOfTrades: number}> {
+export async function computePnls(prefixId: string, extensive: boolean = false, fileNameExtensive: string = ""): Promise<number[]> {
   // Group trades by positionID
   const positions = new Map<string, { buyFound: boolean; sellAmounts: number[]; wallet: string }>();
 
@@ -434,7 +434,7 @@ export async function computePnl(prefixId: string, extensive: boolean = false, f
   }
 
   //sum of all pnl
-  return {pnl: pnls.reduce((acc, val) => acc + val, 0), amountOfTrades: pnls.length};
+  return pnls;
 }
 
 
@@ -486,8 +486,13 @@ setInterval(async () => {
     const history = await loadPnLHistory();
     
     for(const prefixId of prefixToWalletsMap.keys()) {
-        const pnl = await computePnl(prefixId);
-        console.log(`PnL for prefix ${prefixId}: ${pnl.pnl} (${pnl.amountOfTrades} trades)`);
+        const pnls = await computePnls(prefixId);
+        const pnl = pnls.reduce((acc, val) => acc + val, 0);
+        console.log(`Total PnL for prefix ${prefixId}: ${pnl} (${pnls.length} trades)`);
+        for(let i = 0; i * 250 < pnls.length; i++){
+            const pnl = pnls.slice(i * 250, (i + 1) * 250).reduce((acc, val) => acc + val, 0);
+            console.log(`PnL for prefix ${prefixId} (trades ${i * 250} to ${Math.min((i + 1) * 250, pnls.length)}): ${pnl}`);
+        }
         
         // Update history
         if (!history[prefixId]) {
@@ -495,8 +500,8 @@ setInterval(async () => {
         }
         history[prefixId].push({
             timestamp: Date.now(),
-            pnl: pnl.pnl,
-            amountOfTrades: pnl.amountOfTrades
+            pnl: pnl,
+            amountOfTrades: pnls.length
         });
     }
     
