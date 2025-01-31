@@ -114,7 +114,7 @@ export async function init(optsList: InitOptions[]){
                     } else {
                     console.error("Failed to send gRPC stream request", err);
                     setTimeout(() => {
-                        init(optsList);
+                        init(optsList.map(opts => ({...opts, clearMemory: false})));
                         }, 10000);
                     }
                 });
@@ -151,14 +151,14 @@ function setupStreamEventHandlers(stream: ClientDuplexStream<SubscribeRequest, S
     stream.on("end", () => {
         console.error("gRPC stream ended");
         setTimeout(() => {
-            init(optsList);
+            init(optsList.map(opts => ({...opts, clearMemory: false})));
         }, 500);
     });
 
     stream.on("close", () => {
         console.error("gRPC stream closed");
         setTimeout(() => {
-            init(optsList);
+            init(optsList.map(opts => ({...opts, clearMemory: false})));
         }, 500);
     });
 }
