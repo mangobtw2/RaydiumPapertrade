@@ -150,22 +150,16 @@ function setupStreamEventHandlers(stream: ClientDuplexStream<SubscribeRequest, S
 
     stream.on("end", () => {
         console.error("gRPC stream ended");
-        try{
-            stream.end();
+        setTimeout(() => {
             init(optsList);
-        }catch(error){
-            //
-        }
+        }, 500);
     });
 
     stream.on("close", () => {
         console.error("gRPC stream closed");
-        try{
-            stream.end();
+        setTimeout(() => {
             init(optsList);
-        }catch(error){
-            //
-        }
+        }, 500);
     });
 }
 
