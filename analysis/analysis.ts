@@ -5,7 +5,8 @@ import { meanMinusStd } from './meanMinusStd.js';
 import { computeBayesianScore } from './bayesian.js';
 import { computeWinRateGainLossScore } from './winRateGainLoss.js';
 import { computeMedianIqrScore } from './medianMinusIqr.js';
-
+import { computeTrimmedMean } from './trimmedMean.js';
+import { computeAverage } from './average.js';
 // Create or reuse your Redis client
 const redisClient = createClient({
   url: 'redis://localhost:6379',
@@ -15,7 +16,7 @@ export async function init(){
     await redisClient.connect();
 }
 
-type ScoreFunction = "meanMinusStd" | "bayesianNormalPrior" | "meanMinusIqr" | "winRateGainLoss" | "trimmedMean";
+type ScoreFunction = "meanMinusStd" | "bayesianNormalPrior" | "meanMinusIqr" | "winRateGainLoss" | "trimmedMean" | "average";
 
 function getScoreFunction(scoreFunction: ScoreFunction){
     switch(scoreFunction){
@@ -24,6 +25,7 @@ function getScoreFunction(scoreFunction: ScoreFunction){
         case "meanMinusIqr": return computeMedianIqrScore;
         case "winRateGainLoss": return computeWinRateGainLossScore;
         case "trimmedMean": return computeTrimmedMean;
+        case "average": return computeAverage;
     }
 }
 
@@ -187,24 +189,7 @@ export function computeStatistics(values: number[]): {
     return { average, median, standardDeviation };
   }
 
-  function computeTrimmedMean(values: number[], trimPercent: number = 0.1): number {
-    if(values.length == 0) return 0;
-    if(values.length == 1) return values[0];
-    const sorted = [...values].sort((a, b) => a - b).map(x => Math.min(x, 2)); //maximum pnl of 2 sol
-    const n = values.length;
-    const trimCount = Math.ceil(n * trimPercent);
 
-    //only trim the top, not the bottom
-
-    //const start = Math.min(trimCount, n - 1);
-    const start = 0;
-    const end = Math.max(n - trimCount, start);
-
-    const trimmed = sorted.slice(start, end);
-    const mean =
-      trimmed.reduce((acc, v) => acc + v, 0) / (trimmed.length || 1);
-    return mean;
-  }
 
 
 
@@ -220,30 +205,62 @@ function computePnLsForWallet(trades: Trade[]): number[] {
     // Group trades by positionID
     const positions = new Map<string, { buyFound: boolean; sellAmounts: number[] }>();
 
-    let firstBuyTimestampMap = new Map<string, number>();
-    let firstBuyTradeMap = new Map<string, Trade>();
+    // let firstBuyTimestampMap = new Map<string, number>();
+    // let firstBuyTradeMap = new Map<string, Trade>();
 
-    // filter out the non-first buys for every token mint, ranked by timestamp
-    //let filteredTrades = trades.filter((trade) => !trades.some(t => t.mint === trade.mint && t.timestamp < trade.timestamp));
+    // // filter out the non-first buys for every token mint, ranked by timestamp
+    // //let filteredTrades = trades.filter((trade) => !trades.some(t => t.mint === trade.mint && t.timestamp < trade.timestamp));
+    // let filteredTrades: Trade[] = [];
+    // for(const trade of trades){
+    //     if(trade.amount < 0){
+    //         if(!firstBuyTimestampMap.has(trade.mint)){
+    //             firstBuyTimestampMap.set(trade.mint, trade.timestamp);
+    //             firstBuyTradeMap.set(trade.mint, trade);
+    //         }else{
+    //             if(trade.timestamp < firstBuyTimestampMap.get(trade.mint)!){
+    //                 firstBuyTimestampMap.set(trade.mint, trade.timestamp);
+    //                 firstBuyTradeMap.set(trade.mint, trade);
+    //             }
+    //         }
+    //     }else{
+    //         filteredTrades.push(trade);
+    //     }
+    // }
+    // firstBuyTradeMap.forEach((trade) => {
+    //     filteredTrades.push(trade);
+    // });
+
     let filteredTrades: Trade[] = [];
+
+    // Step 1: Group the buy trades by mint
+    const buyTradesByMint = new Map<string, Trade[]>();
     for(const trade of trades){
         if(trade.amount < 0){
-            if(!firstBuyTimestampMap.has(trade.mint)){
-                firstBuyTimestampMap.set(trade.mint, trade.timestamp);
-                firstBuyTradeMap.set(trade.mint, trade);
-            }else{
-                if(trade.timestamp < firstBuyTimestampMap.get(trade.mint)!){
-                    firstBuyTimestampMap.set(trade.mint, trade.timestamp);
-                    firstBuyTradeMap.set(trade.mint, trade);
-                }
-            }
+            if(!buyTradesByMint.has(trade.mint)) buyTradesByMint.set(trade.mint, []);
+            buyTradesByMint.get(trade.mint)!.push(trade);
         }else{
-            filteredTrades.push(trade);
+            filteredTrades.push(trade);  // Keep all sell trades
         }
     }
-    firstBuyTradeMap.forEach((trade) => {
-        filteredTrades.push(trade);
-    });
+
+    // Step 2: Enforce 7 minute cooldown between buys per mint
+    for(const mint of buyTradesByMint.keys()){
+        const buyTrades = buyTradesByMint.get(mint)!;
+        buyTrades.sort((a, b) => a.timestamp - b.timestamp);
+        
+        // Always include the first buy
+        filteredTrades.push(buyTrades[0]);
+        let lastIncludedTimestamp = buyTrades[0].timestamp;
+        
+        // For subsequent buys, only include if outside cooldown period
+        for(let i = 1; i < buyTrades.length; i++){
+            const cooldownPeriod = 7 * 60 * 1000; // 7 minutes in milliseconds
+            if(buyTrades[i].timestamp - lastIncludedTimestamp >= cooldownPeriod){
+                filteredTrades.push(buyTrades[i]);
+                lastIncludedTimestamp = buyTrades[i].timestamp;
+            }
+        }
+    }
 
     for (const trade of filteredTrades) {
       const { positionID, amount } = trade;
