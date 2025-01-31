@@ -343,7 +343,7 @@ export async function getRedisMemoryInfo() {
 
 //pnl computation
 
-export async function computePnls(prefixId: string, extensive: boolean = false, fileNameExtensive: string = ""): Promise<number[]> {
+export async function computePnls(prefixId: string, extensive: boolean = false, fileNameExtensive: string = ""): Promise<{wallet: string, pnl: number}[]> {
   // Group trades by positionID
   const positions = new Map<string, { buyFound: boolean; sellAmounts: number[]; wallet: string }>();
 
@@ -368,27 +368,6 @@ export async function computePnls(prefixId: string, extensive: boolean = false, 
     }
   }
 
-  // filter out the non-first buys for every token mint, ranked by timestamp
-//   let filteredTrades: OurTrade[] = [];
-//   for(const trade of trades){
-//       if(trade.amount < 0){
-//           if(!firstBuyTimestampMap.has(trade.mint)){
-//               firstBuyTimestampMap.set(trade.mint, trade.timestamp);
-//               firstBuyTradeMap.set(trade.mint, trade);
-//           } else {
-//               if(trade.timestamp < firstBuyTimestampMap.get(trade.mint)!) {
-//                   firstBuyTimestampMap.set(trade.mint, trade.timestamp);
-//                   firstBuyTradeMap.set(trade.mint, trade);
-//               }
-//           }
-//       } else {
-//           filteredTrades.push(trade);
-//       }
-//   }
-//   firstBuyTradeMap.forEach((trade) => {
-//       filteredTrades.push(trade);
-//   });
-
   for (const trade of trades) {
     const { positionID, amount } = trade;
     if (!positions.has(positionID)) {
@@ -406,14 +385,14 @@ export async function computePnls(prefixId: string, extensive: boolean = false, 
   }
 
   // Now compute PnLs
-  const pnls: number[] = [];
+  const pnls: {wallet: string, pnl: number}[] = [];
   const pnlsByWallet: Map<string, number[]> = new Map();
   positions.forEach((posData) => {
     // we only consider positions with exactly 3 sells in your example
     if (posData.buyFound && posData.sellAmounts.length === 3) {
       const totalSells = posData.sellAmounts.reduce((acc, val) => acc + val, 0);
       const pnl = totalSells - 1; // net result of buying for 1 SOL and selling
-      pnls.push(pnl);
+      pnls.push({wallet: posData.wallet, pnl: pnl});
       if(!pnlsByWallet.has(posData.wallet)) pnlsByWallet.set(posData.wallet, []);
       pnlsByWallet.get(posData.wallet)!.push(pnl);
     }
@@ -487,15 +466,12 @@ setInterval(async () => {
     
     for(const prefixId of prefixToWalletsMap.keys()) {
         const pnls = await computePnls(prefixId);
-        const pnl = pnls.reduce((acc, val) => acc + val, 0);
+        //step 1: compute total pnl
+        const pnl = pnls.reduce((acc, val) => acc + val.pnl, 0);
         console.log(`Total PnL for prefix ${prefixId}: ${pnl} (${pnls.length} trades)`);
-        for(let i = 0; i * 250 < pnls.length; i++){
-            const pnl = pnls.slice(i * 250, (i + 1) * 250).reduce((acc, val) => acc + val, 0);
-            console.log(`PnL for prefix ${prefixId} (trades ${i * 250} to ${Math.min((i + 1) * 250, pnls.length)}): ${pnl}`);
-        }
-        
-        // Update history
-        if (!history[prefixId]) {
+
+         // Update history
+         if (!history[prefixId]) {
             history[prefixId] = [];
         }
         history[prefixId].push({
@@ -503,7 +479,16 @@ setInterval(async () => {
             pnl: pnl,
             amountOfTrades: pnls.length
         });
+        await savePnLHistory(history);
+        //step 2: get pnl for wallets 0-250, 250-500 etc.
+        const walletsForPrefix = prefixToWalletsMap.get(prefixId);
+        if(!walletsForPrefix) continue;
+        for(let i = 0; i * 250 < walletsForPrefix.length; i++){
+            const wallets = walletsForPrefix.slice(i * 250, (i + 1) * 250);
+            const walletPnls = pnls.filter(pnl => wallets.includes(pnl.wallet));
+            const walletPnl = walletPnls.reduce((acc, val) => acc + val.pnl, 0);
+            console.log(`PnL for prefix ${prefixId} (wallets ${i * 250} to ${Math.min((i + 1) * 250, walletsForPrefix.length)}): ${walletPnl} (${walletPnls.length} trades)`);
+        }
+       
     }
-    
-    await savePnLHistory(history);
 }, 120000);
