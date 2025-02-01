@@ -3,9 +3,9 @@ import pandas as pd
 import matplotlib.pyplot as plt
 from datetime import datetime
 
-def load_and_prepare_data():
+def load_and_prepare_data(filename='cookedHoursAnalysis/interval_pnls.json'):
     """Load JSON data and prepare DataFrame."""
-    with open('cookedHoursAnalysis/interval_pnls.json', 'r') as f:
+    with open(filename, 'r') as f:
         data = json.load(f)
     
     df = pd.DataFrame(data)
@@ -165,6 +165,9 @@ def main():
     plot_total_pnls(df)
     plot_average_pnls(df)
     plot_median_pnls(df)
-
+    # df = load_and_prepare_data('cookedHoursAnalysis/interval_pnls_wallets.json')
+    # plot_total_pnls(df, 'cookedHoursAnalysis/total_pnl_analysis_wallets.png')
+    # plot_average_pnls(df, 'cookedHoursAnalysis/average_pnl_analysis_wallets.png')
+    # plot_median_pnls(df, 'cookedHoursAnalysis/median_pnl_analysis_wallets.png')
 if __name__ == "__main__":
     main()
