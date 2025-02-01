@@ -172,7 +172,7 @@ export async function getTotalPnlsByWalletFile(startTimestamp: number, walletFil
 
     // Save to file
     fs.writeFileSync(
-        `cookedHoursAnalysis/interval_pnls_${walletFile}.json`, 
+        `cookedHoursAnalysis/interval_pnls_wallets.json`, 
         JSON.stringify(results, null, 2)
     );
 
