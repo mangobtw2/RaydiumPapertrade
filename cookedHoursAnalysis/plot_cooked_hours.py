@@ -5,14 +5,14 @@ from datetime import datetime
 
 def load_and_prepare_data():
     """Load JSON data and prepare DataFrame."""
-    with open('results/interval_pnls.json', 'r') as f:
+    with open('cookedHoursAnalysis/interval_pnls.json', 'r') as f:
         data = json.load(f)
     
     df = pd.DataFrame(data)
     df['datetime'] = pd.to_datetime(df['startTimestamp'], unit='ms')
     return df
 
-def plot_total_pnls(df, output_path='results/total_pnl_analysis.png'):
+def plot_total_pnls(df, output_path='cookedHoursAnalysis/total_pnl_analysis.png'):
     """Plot total PnLs with moving averages."""
     # Calculate moving averages
     df['MA_15min'] = df['totalPnL'].rolling(window=3, center=True).mean()
@@ -49,7 +49,7 @@ def plot_total_pnls(df, output_path='results/total_pnl_analysis.png'):
 
     print_statistics(df, "Total PnL")
 
-def plot_average_pnls(df, output_path='results/average_pnl_analysis.png'):
+def plot_average_pnls(df, output_path='cookedHoursAnalysis/average_pnl_analysis.png'):
     """Plot average PnLs (total PnL / trade count) with moving averages."""
     # Calculate average PnL per trade for each interval
     df['avgPnL'] = df['totalPnL'] / df['tradeCount'].where(df['tradeCount'] > 0, float('nan'))
