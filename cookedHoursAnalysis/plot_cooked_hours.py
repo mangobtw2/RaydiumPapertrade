@@ -9,7 +9,8 @@ def load_and_prepare_data(filename='cookedHoursAnalysis/interval_pnls.json'):
         data = json.load(f)
     
     df = pd.DataFrame(data)
-    df['datetime'] = pd.to_datetime(df['startTimestamp'], unit='ms', origin='unix', tz='UTC+1')
+    # Convert to UTC first, then shift to UTC+1
+    df['datetime'] = pd.to_datetime(df['startTimestamp'], unit='ms').dt.tz_localize('UTC').dt.tz_convert('Europe/Paris')
     return df
 
 def plot_total_pnls(df, output_path='cookedHoursAnalysis/total_pnl_analysis.png'):
