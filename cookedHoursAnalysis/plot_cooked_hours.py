@@ -89,7 +89,7 @@ def plot_average_pnls(df, output_path='cookedHoursAnalysis/average_pnl_analysis.
 
     print_statistics(df, "Average PnL per Trade")
 
-def plot_median_pnls(df, output_path='results/median_pnl_analysis.png'):
+def plot_median_pnls(df, output_path='cookedHoursAnalysis/median_pnl_analysis.png'):
     """Plot median PnLs with moving averages and quartiles."""
     # Calculate moving averages
     df['MA_15min'] = df['medianPnL'].rolling(window=3, center=True).mean()
