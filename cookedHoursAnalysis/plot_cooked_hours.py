@@ -89,6 +89,43 @@ def plot_average_pnls(df, output_path='cookedHoursAnalysis/average_pnl_analysis.
 
     print_statistics(df, "Average PnL per Trade")
 
+def plot_median_pnls(df, output_path='results/median_pnl_analysis.png'):
+    """Plot median PnLs with moving averages."""
+    # Calculate moving averages
+    df['MA_15min'] = df['medianPnL'].rolling(window=3, center=True).mean()
+    df['MA_30min'] = df['medianPnL'].rolling(window=6, center=True).mean()
+
+    # Create the plot
+    plt.figure(figsize=(15, 8))
+
+    # Plot raw median PnL data
+    plt.plot(df['datetime'], df['medianPnL'], 'b-', alpha=0.3, label='5-min intervals')
+    plt.plot(df['datetime'], df['MA_15min'], 'r-', linewidth=2, label='15-min MA')
+    plt.plot(df['datetime'], df['MA_30min'], 'g-', linewidth=2, label='30-min MA')
+    plt.axhline(y=0, color='k', linestyle='--', alpha=0.3)
+
+    # Customize the plot
+    plt.title('Median PnL per Interval with Moving Averages')
+    plt.xlabel('Time')
+    plt.ylabel('Median PnL (SOL)')
+    plt.grid(True, alpha=0.3)
+    plt.legend()
+    plt.xticks(rotation=45)
+
+    # Add statistics as text
+    total_trades = df['tradeCount'].sum()
+    overall_median = df['medianPnL'].median()
+    plt.text(0.02, 0.98, 
+             f'Total Trades: {total_trades}\nOverall Median PnL: {overall_median:.4f}', 
+             transform=plt.gca().transAxes, 
+             bbox=dict(facecolor='white', alpha=0.8))
+
+    plt.tight_layout()
+    plt.savefig(output_path, dpi=300, bbox_inches='tight')
+    plt.close()
+
+    print_statistics_median(df)
+
 def print_statistics(df, analysis_type):
     """Print basic statistics about the data."""
     print(f"\n{analysis_type} Analysis Summary:")
@@ -104,11 +141,21 @@ def print_statistics(df, analysis_type):
     
     print(f"Time range: {df['datetime'].min()} to {df['datetime'].max()}")
 
+def print_statistics_median(df):
+    """Print basic statistics about the median data."""
+    print("\nMedian PnL Analysis Summary:")
+    print(f"Total number of intervals: {len(df)}")
+    print(f"Total trades: {df['tradeCount'].sum()}")
+    print(f"Overall median of interval medians: {df['medianPnL'].median():.4f}")
+    print(f"Average of interval medians: {df['medianPnL'].mean():.4f}")
+    print(f"Time range: {df['datetime'].min()} to {df['datetime'].max()}")
+
 def main():
-    """Main function to run both analyses."""
+    """Main function to run all analyses."""
     df = load_and_prepare_data()
     plot_total_pnls(df)
     plot_average_pnls(df)
+    plot_median_pnls(df)
 
 if __name__ == "__main__":
     main()

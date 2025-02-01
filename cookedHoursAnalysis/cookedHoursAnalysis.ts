@@ -15,6 +15,8 @@ interface IntervalPnL {
     endTimestamp: number;    // End of 5-min interval
     totalPnL: number;       // Sum of all PnLs from trades initiated in this interval
     tradeCount: number;     // Number of completed trades initiated in this interval
+    medianPnL: number;      // Median PnL of trades in this interval
+    pnls: number[];         // Array of individual PnLs in this interval
 }
 
 export async function getTotalPnls(startTimestamp: number): Promise<void> {
@@ -75,19 +77,37 @@ export async function getTotalPnls(startTimestamp: number): Promise<void> {
                         startTimestamp: intervalStart,
                         endTimestamp: intervalStart + FIVE_MINUTES,
                         totalPnL: 0,
-                        tradeCount: 0
+                        tradeCount: 0,
+                        medianPnL: 0,
+                        pnls: []
                     });
                 }
 
                 const interval = intervalPnLs.get(intervalStart)!;
                 interval.totalPnL += pnl;
                 interval.tradeCount++;
+                interval.pnls.push(pnl);
             }
         });
     }
 
+    // Calculate medians before converting to array
+    intervalPnLs.forEach(interval => {
+        if (interval.pnls.length > 0) {
+            const sorted = interval.pnls.sort((a, b) => a - b);
+            const mid = Math.floor(sorted.length / 2);
+            interval.medianPnL = sorted.length % 2 === 0 
+                ? (sorted[mid - 1] + sorted[mid]) / 2 
+                : sorted[mid];
+        }
+    });
+
     // Convert map to sorted array
     const results = Array.from(intervalPnLs.values())
+        .map(interval => ({
+            ...interval,
+            pnls: []
+        }))
         .sort((a, b) => a.startTimestamp - b.startTimestamp);
 
     // Save to file
@@ -155,19 +175,36 @@ export async function getTotalPnlsByWalletFile(startTimestamp: number, walletFil
                         startTimestamp: intervalStart,
                         endTimestamp: intervalStart + FIVE_MINUTES,
                         totalPnL: 0,
-                        tradeCount: 0
+                        tradeCount: 0,
+                        medianPnL: 0,
+                        pnls: []
                     });
                 }
 
                 const interval = intervalPnLs.get(intervalStart)!;
                 interval.totalPnL += pnl;
                 interval.tradeCount++;
+                interval.pnls.push(pnl);
             }
         });
     }
 
+    // Calculate medians before converting to array
+    intervalPnLs.forEach(interval => {
+        if (interval.pnls.length > 0) {
+            const sorted = interval.pnls.sort((a, b) => a - b);
+            const mid = Math.floor(sorted.length / 2);
+            interval.medianPnL = sorted.length % 2 === 0 
+                ? (sorted[mid - 1] + sorted[mid]) / 2 
+                : sorted[mid];
+        }
+    });
+
     // Convert map to sorted array
-    const results = Array.from(intervalPnLs.values())
+    const results = Array.from(intervalPnLs.values()).map(interval => ({
+        ...interval,
+        pnls: []
+    }))
         .sort((a, b) => a.startTimestamp - b.startTimestamp);
 
     // Save to file
