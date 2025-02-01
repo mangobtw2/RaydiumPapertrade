@@ -89,8 +89,8 @@ def plot_average_pnls(df, output_path='cookedHoursAnalysis/average_pnl_analysis.
 
     print_statistics(df, "Average PnL per Trade")
 
-def plot_median_pnls(df, output_path='cookedHoursAnalysis/median_pnl_analysis.png'):
-    """Plot median PnLs with moving averages."""
+def plot_median_pnls(df, output_path='results/median_pnl_analysis.png'):
+    """Plot median PnLs with moving averages and quartiles."""
     # Calculate moving averages
     df['MA_15min'] = df['medianPnL'].rolling(window=3, center=True).mean()
     df['MA_30min'] = df['medianPnL'].rolling(window=6, center=True).mean()
@@ -98,16 +98,20 @@ def plot_median_pnls(df, output_path='cookedHoursAnalysis/median_pnl_analysis.pn
     # Create the plot
     plt.figure(figsize=(15, 8))
 
-    # Plot raw median PnL data
+    # Plot quartile range
+    plt.fill_between(df['datetime'], df['percentile25'], df['percentile75'], 
+                     color='blue', alpha=0.2, label='25-75 percentile range')
+
+    # Plot raw median PnL data and moving averages
     plt.plot(df['datetime'], df['medianPnL'], 'b-', alpha=0.3, label='5-min intervals')
     plt.plot(df['datetime'], df['MA_15min'], 'r-', linewidth=2, label='15-min MA')
     plt.plot(df['datetime'], df['MA_30min'], 'g-', linewidth=2, label='30-min MA')
     plt.axhline(y=0, color='k', linestyle='--', alpha=0.3)
 
     # Customize the plot
-    plt.title('Median PnL per Interval with Moving Averages')
+    plt.title('Median PnL per Interval with Moving Averages and Quartiles')
     plt.xlabel('Time')
-    plt.ylabel('Median PnL (SOL)')
+    plt.ylabel('PnL (SOL)')
     plt.grid(True, alpha=0.3)
     plt.legend()
     plt.xticks(rotation=45)
@@ -116,7 +120,10 @@ def plot_median_pnls(df, output_path='cookedHoursAnalysis/median_pnl_analysis.pn
     total_trades = df['tradeCount'].sum()
     overall_median = df['medianPnL'].median()
     plt.text(0.02, 0.98, 
-             f'Total Trades: {total_trades}\nOverall Median PnL: {overall_median:.4f}', 
+             f'Total Trades: {total_trades}\n'
+             f'Overall Median PnL: {overall_median:.4f}\n'
+             f'Avg 25th percentile: {df["percentile25"].mean():.4f}\n'
+             f'Avg 75th percentile: {df["percentile75"].mean():.4f}', 
              transform=plt.gca().transAxes, 
              bbox=dict(facecolor='white', alpha=0.8))
 
@@ -148,6 +155,8 @@ def print_statistics_median(df):
     print(f"Total trades: {df['tradeCount'].sum()}")
     print(f"Overall median of interval medians: {df['medianPnL'].median():.4f}")
     print(f"Average of interval medians: {df['medianPnL'].mean():.4f}")
+    print(f"Average 25th percentile: {df['percentile25'].mean():.4f}")
+    print(f"Average 75th percentile: {df['percentile75'].mean():.4f}")
     print(f"Time range: {df['datetime'].min()} to {df['datetime'].max()}")
 
 def main():

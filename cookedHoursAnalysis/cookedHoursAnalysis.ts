@@ -16,6 +16,8 @@ interface IntervalPnL {
     totalPnL: number;       // Sum of all PnLs from trades initiated in this interval
     tradeCount: number;     // Number of completed trades initiated in this interval
     medianPnL: number;      // Median PnL of trades in this interval
+    percentile25: number;    // 25th percentile PnL of trades in this interval
+    percentile75: number;    // 75th percentile PnL of trades in this interval
     pnls: number[];         // Array of individual PnLs in this interval
 }
 
@@ -79,6 +81,8 @@ export async function getTotalPnls(startTimestamp: number): Promise<void> {
                         totalPnL: 0,
                         tradeCount: 0,
                         medianPnL: 0,
+                        percentile25: 0,
+                        percentile75: 0,
                         pnls: []
                     });
                 }
@@ -91,14 +95,22 @@ export async function getTotalPnls(startTimestamp: number): Promise<void> {
         });
     }
 
-    // Calculate medians before converting to array
+    // Calculate medians and percentiles before converting to array
     intervalPnLs.forEach(interval => {
         if (interval.pnls.length > 0) {
             const sorted = interval.pnls.sort((a, b) => a - b);
             const mid = Math.floor(sorted.length / 2);
+            
+            // Calculate median
             interval.medianPnL = sorted.length % 2 === 0 
                 ? (sorted[mid - 1] + sorted[mid]) / 2 
                 : sorted[mid];
+            
+            // Calculate 25th and 75th percentiles
+            const p25Index = Math.floor(sorted.length * 0.25);
+            const p75Index = Math.floor(sorted.length * 0.75);
+            interval.percentile25 = sorted[p25Index];
+            interval.percentile75 = sorted[p75Index];
         }
     });
 
@@ -177,6 +189,8 @@ export async function getTotalPnlsByWalletFile(startTimestamp: number, walletFil
                         totalPnL: 0,
                         tradeCount: 0,
                         medianPnL: 0,
+                        percentile25: 0,
+                        percentile75: 0,
                         pnls: []
                     });
                 }
@@ -189,14 +203,22 @@ export async function getTotalPnlsByWalletFile(startTimestamp: number, walletFil
         });
     }
 
-    // Calculate medians before converting to array
+    // Calculate medians and percentiles before converting to array
     intervalPnLs.forEach(interval => {
         if (interval.pnls.length > 0) {
             const sorted = interval.pnls.sort((a, b) => a - b);
             const mid = Math.floor(sorted.length / 2);
+            
+            // Calculate median
             interval.medianPnL = sorted.length % 2 === 0 
                 ? (sorted[mid - 1] + sorted[mid]) / 2 
                 : sorted[mid];
+            
+            // Calculate 25th and 75th percentiles
+            const p25Index = Math.floor(sorted.length * 0.25);
+            const p75Index = Math.floor(sorted.length * 0.75);
+            interval.percentile25 = sorted[p25Index];
+            interval.percentile75 = sorted[p75Index];
         }
     });
 
