@@ -92,7 +92,7 @@ export async function getTotalPnls(startTimestamp: number): Promise<void> {
 
     // Save to file
     fs.writeFileSync(
-        "results/interval_pnls.json", 
+        "cookedHoursAnalysis/interval_pnls.json", 
         JSON.stringify(results, null, 2)
     );
 

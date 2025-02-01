@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 from datetime import datetime
 
 # Read the JSON file
-with open('results/interval_pnls.json', 'r') as f:
+with open('cookedHoursAnalysis/interval_pnls.json', 'r') as f:
     data = json.load(f)
 
 # Convert to DataFrame
@@ -51,7 +51,7 @@ plt.text(0.02, 0.98, f'Total Trades: {total_trades}\nAverage PnL: {avg_pnl:.4f}'
          bbox=dict(facecolor='white', alpha=0.8))
 
 # Save the plot
-plt.savefig('results/pnl_analysis.png', dpi=300, bbox_inches='tight')
+plt.savefig('cookedHoursAnalysis/pnl_analysis.png', dpi=300, bbox_inches='tight')
 plt.close()
 
 # Print some basic statistics
