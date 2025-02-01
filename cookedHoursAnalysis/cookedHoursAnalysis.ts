@@ -99,3 +99,82 @@ export async function getTotalPnls(startTimestamp: number): Promise<void> {
     console.log(`Analysis complete. Processed ${results.length} intervals.`);
 }
 
+export async function getTotalPnlsByWalletFile(startTimestamp: number, walletFile: string): Promise<void> {
+    const walletList = JSON.parse(fs.readFileSync(walletFile, 'utf8')).map((wallet: any) => wallet.address);
+    // Round up startTimestamp to next 5-minute interval
+    const FIVE_MINUTES = 5 * 60 * 1000;
+    startTimestamp = Math.ceil(startTimestamp / FIVE_MINUTES) * FIVE_MINUTES;
+    
+
+    // Initialize intervals map
+    const intervalPnLs = new Map<number, IntervalPnL>();
+
+    // Process each wallet
+    for (let i = 0; i < walletList.length; i++) {
+        if (i % 1000 === 0) {
+            console.log(`Processing wallet ${i} of ${walletList.length}`);
+        }
+
+        const rawTrades = await redisClient.lRange(`trades:${walletList[i]}`, 0, -1);
+        const trades: Trade[] = rawTrades.map(row => JSON.parse(row));
+
+        // Group trades by positionID
+        const positions = new Map<string, {
+            buyTimestamp: number;
+            sellAmounts: number[];
+        }>();
+
+        // Process trades
+        for (const trade of trades) {
+            if (!positions.has(trade.positionID)) {
+                positions.set(trade.positionID, {
+                    buyTimestamp: 0,
+                    sellAmounts: []
+                });
+            }
+
+            const pos = positions.get(trade.positionID)!;
+            if (trade.amount < 0) {
+                // Buy trade
+                pos.buyTimestamp = trade.timestamp;
+            } else {
+                // Sell trade
+                pos.sellAmounts.push(trade.amount);
+            }
+        }
+
+        // Calculate PnLs and assign to intervals
+        positions.forEach((pos) => {
+            if (pos.buyTimestamp >= startTimestamp && pos.sellAmounts.length === 3) {
+                const intervalStart = Math.floor(pos.buyTimestamp / FIVE_MINUTES) * FIVE_MINUTES;
+                const totalSell = pos.sellAmounts.reduce((sum, amount) => sum + amount, 0);
+                const pnl = totalSell - 1; // -1 because we bought for 1 SOL
+
+                if (!intervalPnLs.has(intervalStart)) {
+                    intervalPnLs.set(intervalStart, {
+                        startTimestamp: intervalStart,
+                        endTimestamp: intervalStart + FIVE_MINUTES,
+                        totalPnL: 0,
+                        tradeCount: 0
+                    });
+                }
+
+                const interval = intervalPnLs.get(intervalStart)!;
+                interval.totalPnL += pnl;
+                interval.tradeCount++;
+            }
+        });
+    }
+
+    // Convert map to sorted array
+    const results = Array.from(intervalPnLs.values())
+        .sort((a, b) => a.startTimestamp - b.startTimestamp);
+
+    // Save to file
+    fs.writeFileSync(
+        `cookedHoursAnalysis/interval_pnls_${walletFile}.json`, 
+        JSON.stringify(results, null, 2)
+    );
+
+    console.log(`Analysis complete. Processed ${results.length} intervals.`);
+}
