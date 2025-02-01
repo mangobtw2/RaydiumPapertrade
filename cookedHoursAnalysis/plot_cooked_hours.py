@@ -133,6 +133,48 @@ def plot_median_pnls(df, output_path='cookedHoursAnalysis/median_pnl_analysis.pn
 
     print_statistics_median(df)
 
+def plot_cumulative_pnl(df, output_path='cookedHoursAnalysis/cumulative_pnl_analysis.png'):
+    """Plot cumulative PnL over time."""
+    # Calculate cumulative PnL
+    df['cumulativePnL'] = df['totalPnL'].cumsum()
+
+    # Create the plot
+    plt.figure(figsize=(15, 8))
+
+    # Plot cumulative PnL
+    plt.plot(df['datetime'], df['cumulativePnL'], 'b-', linewidth=2, label='Cumulative PnL')
+    plt.axhline(y=0, color='k', linestyle='--', alpha=0.3)
+
+    # Customize the plot
+    plt.title('Cumulative PnL Over Time')
+    plt.xlabel('Time')
+    plt.ylabel('Cumulative PnL (SOL)')
+    plt.grid(True, alpha=0.3)
+    plt.legend()
+    plt.xticks(rotation=45)
+
+    # Add statistics as text
+    total_trades = df['tradeCount'].sum()
+    final_pnl = df['cumulativePnL'].iloc[-1]
+    max_drawdown = (df['cumulativePnL'] - df['cumulativePnL'].expanding().max()).min()
+    plt.text(0.02, 0.98, 
+             f'Total Trades: {total_trades}\n'
+             f'Final PnL: {final_pnl:.4f}\n'
+             f'Max Drawdown: {max_drawdown:.4f}', 
+             transform=plt.gca().transAxes, 
+             bbox=dict(facecolor='white', alpha=0.8))
+
+    plt.tight_layout()
+    plt.savefig(output_path, dpi=300, bbox_inches='tight')
+    plt.close()
+
+    print("\nCumulative PnL Analysis Summary:")
+    print(f"Total number of intervals: {len(df)}")
+    print(f"Total trades: {total_trades}")
+    print(f"Final PnL: {final_pnl:.4f}")
+    print(f"Max Drawdown: {max_drawdown:.4f}")
+    print(f"Time range: {df['datetime'].min()} to {df['datetime'].max()}")
+
 def print_statistics(df, analysis_type):
     """Print basic statistics about the data."""
     print(f"\n{analysis_type} Analysis Summary:")
@@ -165,9 +207,11 @@ def main():
     plot_total_pnls(df)
     plot_average_pnls(df)
     plot_median_pnls(df)
+    plot_cumulative_pnl(df)
     # df = load_and_prepare_data('cookedHoursAnalysis/interval_pnls_wallets.json')
     # plot_total_pnls(df, 'cookedHoursAnalysis/total_pnl_analysis_wallets.png')
     # plot_average_pnls(df, 'cookedHoursAnalysis/average_pnl_analysis_wallets.png')
     # plot_median_pnls(df, 'cookedHoursAnalysis/median_pnl_analysis_wallets.png')
+    # plot_cumulative_pnl(df, 'cookedHoursAnalysis/cumulative_pnl_analysis_wallets.png')
 if __name__ == "__main__":
     main()
