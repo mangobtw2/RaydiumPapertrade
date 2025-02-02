@@ -11,6 +11,7 @@ export async function init(){
 
 export async function compressWallet(wallet: string){
     const oldKey = `trades:${wallet}`;
+    const newKey = `rt:${wallet}`;
     const rawTrades = await redisClient.lRange(oldKey, 0, -1);
     const trades: TradeOld[] = rawTrades.map(row => JSON.parse(row));
     // Group trades by positionID
@@ -46,9 +47,11 @@ export async function compressWallet(wallet: string){
                 t: pos.buyTimestamp,
                 m: pos.mint
             }
-            await redisClient.lPush(`rt:${wallet}`, JSON.stringify(trade));
+            await redisClient.lPush(newKey, JSON.stringify(trade));
         }
     });
+
+    console.log(`Compressed ${wallet} trades`);
 }
 
 
