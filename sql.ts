@@ -74,7 +74,8 @@ export async function transferAllWalletsToSql(){
 
         const rawTrades = await redisClient.lRange(wallets[i], 0, -1);
         const trades: CompressedTrade[] = rawTrades.map(row => JSON.parse(row));
-        await transferWalletToSql(wallets[i], trades);
+        const walletName = wallets[i].split(':')[1];
+        await transferWalletToSql(walletName, trades);
     }
 }
 
