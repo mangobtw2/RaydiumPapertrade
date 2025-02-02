@@ -100,8 +100,6 @@ export async function transferWalletToSql(wallet: string, trades: CompressedTrad
         }
         
         await pool.query('COMMIT');
-        
-        console.log(`Successfully transferred trades for wallet: ${wallet}`);
     } catch (error) {
         await pool.query('ROLLBACK');
         console.error('Error transferring wallet data:', error);
