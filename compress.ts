@@ -13,10 +13,11 @@ export async function compressAllWallets(removeOld: boolean = false){
     const wallets = await redisClient.keys('trades:*');
     let count = 0;
     for(const wallet of wallets){
+        const walletName = wallet.split(':')[1];
         if(count % 10000 === 0){
             console.log(`Compressing wallet ${count} of ${wallets.length}`);
         }
-        await compressWallet(wallet, removeOld);
+        await compressWallet(walletName, removeOld);
         count++;
     }
     console.log(`Compressed ${wallets.length} wallets`);
@@ -69,7 +70,7 @@ export async function compressWallet(wallet: string, removeOld: boolean = false)
             await redisClient.del(oldKey);
         }
 
-        console.log(`Compressed ${wallet} trades`);
+        //console.log(`Compressed ${wallet} trades`);
     }catch(error){
         console.error(`Error compressing wallet ${wallet}: ${error}`);
     }
