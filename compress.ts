@@ -9,7 +9,7 @@ export async function init(){
     await redisClient.connect();
 }
 
-export async function compressKey(wallet: string){
+export async function compressWallet(wallet: string){
     const oldKey = `trades:${wallet}`;
     const rawTrades = await redisClient.lRange(oldKey, 0, -1);
     const trades: TradeOld[] = rawTrades.map(row => JSON.parse(row));
