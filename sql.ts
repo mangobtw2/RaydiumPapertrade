@@ -130,7 +130,7 @@ export async function getWalletTrades(wallet: string): Promise<CompressedTrade[]
 export async function getAllWallets(): Promise<string[]> {
     try {
         const result = await pool.query(
-            'SELECT DISTINCT wallet FROM compressed_trades ORDER BY wallet'
+            'SELECT DISTINCT wallet FROM compressed_trades'
         );
         
         return result.rows.map(row => row.wallet);
