@@ -22,6 +22,14 @@ interface CompressedTrade {
     m: string; //first 10 chars of mint
 }
 
+interface TableSize {
+    tableName: string;
+    totalSize: string;
+    tableSize: string;
+    indexSize: string;
+    rowCount: number;
+}
+
 export async function initDatabase() {
     try {
         await pool.query(`
@@ -122,6 +130,36 @@ export async function getAllWallets(): Promise<string[]> {
         return result.rows.map(row => row.wallet);
     } catch (error) {
         console.error('Error retrieving wallets:', error);
+        throw error;
+    }
+}
+
+export async function getTableSize(): Promise<TableSize> {
+    try {
+        const result = await pool.query(`
+            SELECT
+                pg_size_pretty(pg_total_relation_size('compressed_trades')) as total_size,
+                pg_size_pretty(pg_table_size('compressed_trades')) as table_size,
+                pg_size_pretty(pg_indexes_size('compressed_trades')) as index_size,
+                (SELECT reltuples::bigint FROM pg_class WHERE relname = 'compressed_trades') as row_count;
+        `);
+        
+        const row = result.rows[0];
+        const size: TableSize = {
+            tableName: 'compressed_trades',
+            totalSize: row.total_size,    // Total size including indexes
+            tableSize: row.table_size,    // Size of the table only
+            indexSize: row.index_size,    // Size of all indexes
+            rowCount: parseInt(row.row_count)
+        };
+        console.log(`Table size information:
+            - Total size: ${size.totalSize}
+            - Table size: ${size.tableSize}
+            - Index size: ${size.indexSize}
+            - Row count: ${size.rowCount}`);
+        return size;
+    } catch (error) {
+        console.error('Error getting table size:', error);
         throw error;
     }
 }
