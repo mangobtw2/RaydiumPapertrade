@@ -235,9 +235,3 @@ export async function getTableSize(): Promise<TableSize> {
         throw error;
     }
 }
-
-export async function tempDeleteAllWithTimestampZero(){
-    console.log('Deleting all trades with timestamp 0 and print the amount deleted');
-    const result = await pool.query('DELETE FROM compressed_trades WHERE timestamp = 0');
-    console.log(`Deleted ${result.rowCount} trades`);
-}
