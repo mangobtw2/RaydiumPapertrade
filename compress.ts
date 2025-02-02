@@ -27,6 +27,12 @@ export async function compressWallet(wallet: string, removeOld: boolean = false)
     try{
         const oldKey = `trades:${wallet}`;
         const newKey = `rt:${wallet}`;
+        if(await redisClient.lLen(oldKey) > 100000){
+            if(removeOld){
+                await redisClient.del(oldKey);
+            }
+            return;
+        } 
         const rawTrades = await redisClient.lRange(oldKey, 0, -1);
         const trades: TradeOld[] = rawTrades.map(row => JSON.parse(row));
         // Group trades by positionID
