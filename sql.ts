@@ -75,11 +75,11 @@ export async function transferAllWalletsToSql(){
         const rawTrades = await redisClient.lRange(wallets[i], 0, -1);
         const trades: CompressedTrade[] = rawTrades.map(row => JSON.parse(row));
         const walletName = wallets[i].split(':')[1];
-        await transferWalletToSql(walletName, trades);
+        await transferTradesToSql(walletName, trades);
     }
 }
 
-export async function transferWalletToSql(wallet: string, trades: CompressedTrade[]) {
+export async function transferTradesToSql(wallet: string, trades: CompressedTrade[]) {
     try {
         // Simple insert without conflict handling since we want to keep all trades
         const query = `
@@ -108,33 +108,22 @@ export async function transferWalletToSql(wallet: string, trades: CompressedTrad
 }
 
 // Utility function to retrieve wallet data
-export async function getWalletData(wallet: string): Promise<CompressedWalletData | null> {
+export async function getWalletTrades(wallet: string): Promise<CompressedTrade[]> {
     try {
         const result = await pool.query(
             'SELECT * FROM compressed_trades WHERE wallet = $1',
             [wallet]
         );
         
-        if (result.rows.length === 0) {
-            return null;
-        }
-        
-        const row = result.rows[0];
-        return {
-            wallet: row.wallet,
-            trades: [
-                {
-                    pl: Number(row.pnl),
-                    t: Number(row.timestamp),
-                    m: row.mint
-                }
-            ],
-            totalPnl: Number(row.pnl),
-            tradeCount: 1
-        };
+        const trades = result.rows.map(row => ({
+            pl: Number(row.pnl),
+            t: Number(row.timestamp),
+            m: row.mint
+        }));
+        return trades;
     } catch (error) {
         console.error('Error retrieving wallet data:', error);
-        throw error;
+        return [];
     }
 }
 
