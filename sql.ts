@@ -15,11 +15,11 @@ export const pool = new pg.Pool({
     port: 5432,
   });
 
-interface CompressedWalletData {
-    wallet: string;
-    trades: CompressedTrade[];
-    totalPnl: number;
-    tradeCount: number;
+interface TradeOld {
+    positionID: string;
+    amount: number;      // -1 means "bought for 1 SOL"; positive means partial sells
+    timestamp: number;
+    mint: string;        // e.g., "3Jy9X..."
 }
 
 interface CompressedTrade {
@@ -64,7 +64,72 @@ export async function init() {
     }
 }
 
-export async function transferAllWalletsToSql(){
+export async function transferFromRedisToSql(clearMemory: boolean = false){
+    const wallets = await redisClient.keys('trades:*');
+    let count = 0;
+    for(const wallet of wallets){
+        const walletName = wallet.split(':')[1];
+        if(await redisClient.lLen(wallet) > 100000){
+            if(clearMemory){
+                await redisClient.del(wallet);
+            }
+            continue;
+        }
+        if(count % 10000 === 0){
+            console.log(`Compressing wallet ${count} of ${wallets.length}`);
+        }
+        const tradesRaw = await redisClient.lRange(wallet, 0, -1);
+        const trades: TradeOld[] = tradesRaw.map(row => JSON.parse(row));
+        const compressedTrades = await compressTrades(trades);
+        await transferTradesToSql(walletName, compressedTrades);
+        if(clearMemory){
+            await redisClient.del(wallet);
+        }
+        count++;
+    }
+    console.log(`Compressed ${wallets.length} wallets`);
+}
+
+export async function compressTrades(trades: TradeOld[]): Promise<CompressedTrade[]> {
+    const compressedTrades: CompressedTrade[] = [];
+    const positions = new Map<string, { buyTimestamp: number; sellAmounts: number[]; mint: string }>();
+
+    for (const trade of trades) {
+        if (!positions.has(trade.positionID)) {
+            positions.set(trade.positionID, {
+                buyTimestamp: 0,
+                sellAmounts: [],
+                mint: trade.mint.substring(0, 10)
+            });
+        }
+
+        const pos = positions.get(trade.positionID)!;
+        if (trade.amount < 0) {
+            // Buy trade
+            pos.buyTimestamp = trade.timestamp;
+        } else {
+            // Sell trade
+            pos.sellAmounts.push(trade.amount);
+        }
+    }
+
+    // Calculate PnLs and assign to intervals
+    positions.forEach((pos) => {
+        if (pos.sellAmounts.length === 3 && pos.buyTimestamp !== 0) {
+            const totalSell = pos.sellAmounts.reduce((sum, amount) => sum + amount, 0);
+            const pnl = parseFloat((totalSell - 1).toFixed(4)); // Round to max 4 decimals, remove trailing zeros
+            const trade: CompressedTrade = {
+                pl: pnl,
+                t: pos.buyTimestamp,
+                m: pos.mint
+            }
+            compressedTrades.push(trade);
+        }
+    });
+    return compressedTrades;
+}
+
+export async function transferFromCompressedToSql(){
     const wallets = await redisClient.keys('rt:*');
     // Process each wallet
     for (let i = 0; i < wallets.length; i++) {
@@ -169,4 +234,8 @@ export async function getTableSize(): Promise<TableSize> {
         console.error('Error getting table size:', error);
         throw error;
     }
+}
+
+export async function tempDeleteAllWithTimestampZero(){
+    await pool.query('DELETE FROM compressed_trades WHERE timestamp = 0');
 }
