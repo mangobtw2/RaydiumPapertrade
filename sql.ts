@@ -77,6 +77,7 @@ export async function transferAllWalletsToSql(){
         const walletName = wallets[i].split(':')[1];
         await transferTradesToSql(walletName, trades);
     }
+    console.log('Transferred all wallets to SQL');
 }
 
 export async function transferTradesToSql(wallet: string, trades: CompressedTrade[]) {
