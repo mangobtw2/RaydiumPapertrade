@@ -9,49 +9,64 @@ export async function init(){
     await redisClient.connect();
 }
 
-export async function compressWallet(wallet: string){
-    const oldKey = `trades:${wallet}`;
-    const newKey = `rt:${wallet}`;
-    const rawTrades = await redisClient.lRange(oldKey, 0, -1);
-    const trades: TradeOld[] = rawTrades.map(row => JSON.parse(row));
-    // Group trades by positionID
-    
-    const positions = new Map<string, { buyTimestamp: number; sellAmounts: number[]; mint: string }>();
-
-    for (const trade of trades) {
-        if (!positions.has(trade.positionID)) {
-            positions.set(trade.positionID, {
-                buyTimestamp: 0,
-                sellAmounts: [],
-                mint: trade.mint.substring(0, 10)
-            });
-        }
-
-        const pos = positions.get(trade.positionID)!;
-        if (trade.amount < 0) {
-            // Buy trade
-            pos.buyTimestamp = trade.timestamp;
-        } else {
-            // Sell trade
-            pos.sellAmounts.push(trade.amount);
-        }
+export async function compressAllWallets(removeOld: boolean = false){
+    const wallets = await redisClient.keys('trades:*');
+    for(const wallet of wallets){
+        await compressWallet(wallet, removeOld);
     }
+}
 
-    // Calculate PnLs and assign to intervals
-    positions.forEach(async (pos) => {
-        if (pos.sellAmounts.length === 3) {
-            const totalSell = pos.sellAmounts.reduce((sum, amount) => sum + amount, 0);
-            const pnl = parseFloat((totalSell - 1).toFixed(4)); // Round to max 4 decimals, remove trailing zeros
-            const trade: CompressedTrade = {
-                pl: pnl,
-                t: pos.buyTimestamp,
-                m: pos.mint
+export async function compressWallet(wallet: string, removeOld: boolean = false){
+    try{
+        const oldKey = `trades:${wallet}`;
+        const newKey = `rt:${wallet}`;
+        const rawTrades = await redisClient.lRange(oldKey, 0, -1);
+        const trades: TradeOld[] = rawTrades.map(row => JSON.parse(row));
+        // Group trades by positionID
+        
+        const positions = new Map<string, { buyTimestamp: number; sellAmounts: number[]; mint: string }>();
+
+        for (const trade of trades) {
+            if (!positions.has(trade.positionID)) {
+                positions.set(trade.positionID, {
+                    buyTimestamp: 0,
+                    sellAmounts: [],
+                    mint: trade.mint.substring(0, 10)
+                });
             }
-            await redisClient.lPush(newKey, JSON.stringify(trade));
-        }
-    });
 
-    console.log(`Compressed ${wallet} trades`);
+            const pos = positions.get(trade.positionID)!;
+            if (trade.amount < 0) {
+                // Buy trade
+                pos.buyTimestamp = trade.timestamp;
+            } else {
+                // Sell trade
+                pos.sellAmounts.push(trade.amount);
+            }
+        }
+
+        // Calculate PnLs and assign to intervals
+        positions.forEach(async (pos) => {
+            if (pos.sellAmounts.length === 3) {
+                const totalSell = pos.sellAmounts.reduce((sum, amount) => sum + amount, 0);
+                const pnl = parseFloat((totalSell - 1).toFixed(4)); // Round to max 4 decimals, remove trailing zeros
+                const trade: CompressedTrade = {
+                    pl: pnl,
+                    t: pos.buyTimestamp,
+                    m: pos.mint
+                }
+                await redisClient.lPush(newKey, JSON.stringify(trade));
+            }
+        });
+
+        if(removeOld){
+            await redisClient.del(oldKey);
+        }
+
+        console.log(`Compressed ${wallet} trades`);
+    }catch(error){
+        console.error(`Error compressing wallet ${wallet}: ${error}`);
+    }
 }
 
 
