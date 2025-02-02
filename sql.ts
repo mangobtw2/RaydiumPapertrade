@@ -1,4 +1,10 @@
 import pg from 'pg';
+import {createClient} from 'redis';
+
+const redisClient = createClient({
+    url: 'redis://localhost:6379',
+  });
+  
 
 // Database connection pool
 export const pool = new pg.Pool({
@@ -30,8 +36,9 @@ interface TableSize {
     rowCount: number;
 }
 
-export async function initDatabase() {
+export async function init() {
     try {
+        await redisClient.connect();
         await pool.query(`
             CREATE TABLE IF NOT EXISTS compressed_trades (
                 wallet VARCHAR(44) NOT NULL,
@@ -54,6 +61,20 @@ export async function initDatabase() {
     } catch (error) {
         console.error('Error initializing database:', error);
         throw error;
+    }
+}
+
+export async function transferAllWalletsToSql(){
+    const wallets = await redisClient.keys('rt:*');
+    // Process each wallet
+    for (let i = 0; i < wallets.length; i++) {
+        if (i % 1000 === 0) {
+            console.log(`Processing wallet ${i} of ${wallets.length}`);
+        }
+
+        const rawTrades = await redisClient.lRange(wallets[i], 0, -1);
+        const trades: CompressedTrade[] = rawTrades.map(row => JSON.parse(row));
+        await transferWalletToSql(wallets[i], trades);
     }
 }
 
