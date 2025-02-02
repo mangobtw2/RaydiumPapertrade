@@ -41,11 +41,11 @@ export async function init() {
         await redisClient.connect();
         await pool.query(`
             CREATE TABLE IF NOT EXISTS compressed_trades (
+                id SERIAL PRIMARY KEY,
                 wallet VARCHAR(44) NOT NULL,
                 pnl NUMERIC(20, 4) NOT NULL,
                 timestamp BIGINT NOT NULL,
-                mint VARCHAR(10) NOT NULL,
-                PRIMARY KEY (wallet, timestamp, mint)
+                mint VARCHAR(10) NOT NULL
             );
             
             -- Index for fast wallet lookups
@@ -80,13 +80,10 @@ export async function transferAllWalletsToSql(){
 
 export async function transferWalletToSql(wallet: string, trades: CompressedTrade[]) {
     try {
-        // Using a prepared statement for bulk insert
+        // Simple insert without conflict handling since we want to keep all trades
         const query = `
             INSERT INTO compressed_trades (wallet, pnl, timestamp, mint)
             VALUES ($1, $2, $3, $4)
-            ON CONFLICT (wallet, timestamp, mint) 
-            DO UPDATE SET 
-                pnl = EXCLUDED.pnl;
         `;
         
         // Execute all inserts in a single transaction
