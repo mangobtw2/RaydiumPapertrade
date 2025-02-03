@@ -64,45 +64,29 @@ export async function init() {
     }
 }
 
-export async function transferFromRedisToSql(clearMemory: boolean = false, batchSize: number = 100) {
+export async function transferFromRedisToSql(clearMemory: boolean = false){
     const wallets = await redisClient.keys('trades:*');
-    let processedCount = 0;
-    
-    // Process wallets in batches
-    while (processedCount < wallets.length) {
-        const batch = wallets.slice(processedCount, processedCount + batchSize);
-        console.log(`Processing batch ${processedCount/batchSize + 1}, wallets ${processedCount} to ${processedCount + batch.length} of ${wallets.length}`);
-        
-        // Process each wallet in the batch concurrently
-        await Promise.all(batch.map(async (wallet) => {
-            try {
-                const walletName = wallet.split(':')[1];
-                const walletSize = await redisClient.lLen(wallet);
-                
-                if (walletSize > 100000) {
-                    if (clearMemory) {
-                        await redisClient.del(wallet);
-                    }
-                    return;
-                }
-                
-                const tradesRaw = await redisClient.lRange(wallet, 0, -1);
-                const trades: TradeOld[] = tradesRaw.map(row => JSON.parse(row));
-                const compressedTrades = await compressTrades(trades);
-                await transferTradesToSql(walletName, compressedTrades);
-                
-                if (clearMemory) {
-                    await redisClient.del(wallet);
-                }
-            } catch (error) {
-                console.error(`Error processing wallet ${wallet}:`, error);
-                // Continue with other wallets even if one fails
+    let count = 0;
+    for(const wallet of wallets){
+        const walletName = wallet.split(':')[1];
+        if(await redisClient.lLen(wallet) > 100000){
+            if(clearMemory){
+                await redisClient.del(wallet);
             }
-        }));
-        
-        processedCount += batch.length;
+            continue;
+        }
+        if(count % 10000 === 0){
+            console.log(`Compressing wallet ${count} of ${wallets.length}`);
+        }
+        const tradesRaw = await redisClient.lRange(wallet, 0, -1);
+        const trades: TradeOld[] = tradesRaw.map(row => JSON.parse(row));
+        const compressedTrades = await compressTrades(trades);
+        await transferTradesToSql(walletName, compressedTrades);
+        if(clearMemory){
+            await redisClient.del(wallet);
+        }
+        count++;
     }
-    
     console.log(`Compressed ${wallets.length} wallets`);
 }
 
