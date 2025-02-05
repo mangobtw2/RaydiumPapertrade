@@ -69,7 +69,7 @@ export async function transferFromRedisToSql(clearMemory: boolean = false){
     let count = 0;
     for(const wallet of wallets){
         const walletName = wallet.split(':')[1];
-        if(await redisClient.lLen(wallet) > 100000){
+        if(await redisClient.lLen(wallet) > 100000 && walletName != "CkUZV387xnoGpF7wC2moMa6mPmAgCvTT4pWgzq4M9fCD"){
             if(clearMemory){
                 await redisClient.del(wallet);
             }
