@@ -236,8 +236,8 @@ export async function getTableSize(): Promise<TableSize> {
     }
 }
 
-export async function tempDeleteAllLast6Hours(): Promise<void> {
-    const timestamp = Date.now() - 6 * 60 * 60 * 1000;
+export async function tempDeleteLastHours(hours: number): Promise<void> {
+    const timestamp = Date.now() - hours * 60 * 60 * 1000;
     try {
         await pool.query('BEGIN');
         const result = await pool.query(
@@ -246,7 +246,7 @@ export async function tempDeleteAllLast6Hours(): Promise<void> {
         );
         await pool.query('COMMIT');
         
-        console.log(`Deleted ${result.rowCount} trades from the last 6 hours (after ${new Date(timestamp).toISOString()})`);
+        console.log(`Deleted ${result.rowCount} trades from the last ${hours} hours (after ${new Date(timestamp).toISOString()})`);
     } catch (error) {
         await pool.query('ROLLBACK');
         console.error('Error deleting recent trades:', error);
